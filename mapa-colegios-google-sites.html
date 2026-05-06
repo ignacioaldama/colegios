@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colegios de la Comunidad de Madrid</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  >
+  <style>
+    :root {
+      --bg: #eef1f4;
+      --panel: rgba(255, 255, 255, 0.94);
+      --ink: #1f2933;
+      --muted: #5b6875;
+      --accent: #2f5d62;
+      --border: rgba(31, 41, 51, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(47, 93, 98, 0.08), transparent 28%),
+        linear-gradient(180deg, #f7f9fb 0%, var(--bg) 100%);
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+    }
+
+    .panel {
+      padding: 24px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      overflow-y: auto;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .intro {
+      margin: 16px 0 18px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .status {
+      margin: 0 0 18px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f3f5f7;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      padding: 14px;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 24px rgba(31, 41, 51, 0.06);
+    }
+
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    .meta {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    #map {
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    .leaflet-popup-content {
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    .popup-title {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .popup-text {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 860px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      #map {
+        min-height: 62vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="panel">
+      <p class="eyebrow">Google Sites + OpenStreetMap</p>
+      <h1>Colegios de Madrid</h1>
+      <p class="intro">
+        Vista inicial con los 5 primeros centros del fichero CSV. El mapa usa OpenStreetMap
+        con base gris de CARTO y obtiene las coordenadas a partir de la dirección postal.
+      </p>
+      <p id="status" class="status">Preparando mapa...</p>
+      <section id="school-list" class="list"></section>
+    </aside>
+    <main id="map" aria-label="Mapa de colegios"></main>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    const schools = [
+      {
+        area: "Madrid-Oeste",
+        codigo: "28060646",
+        tipo: "EEI",
+        centro: "ACHALAY",
+        domicilio: "Avenida De Isabel De Farnesio, 14",
+        municipio: "Boadilla del Monte",
+        distrito: "-",
+        postal: "28660",
+        telefono: "916326518",
+        titularidad: "Publico"
+      },
+      {
+        area: "Madrid-Este",
+        codigo: "28063027",
+        tipo: "EEI",
+        centro: "ACUARELA",
+        domicilio: "Avenida Del Somorrostro, 193",
+        municipio: "San Fernando de Henares",
+        distrito: "-",
+        postal: "28830",
+        telefono: "916694580",
+        titularidad: "Publico"
+      },
+      {
+        area: "Madrid-Sur",
+        codigo: "28047460",
+        tipo: "EEI",
+        centro: "ADIVINANZAS",
+        domicilio: "Calle De Las Palmeras, 1",
+        municipio: "Alcorcon",
+        distrito: "-",
+        postal: "28922",
+        telefono: "911886061",
+        titularidad: "Publico"
+      },
+      {
+        area: "Madrid-Capital",
+        codigo: "28047551",
+        tipo: "EEI",
+        centro: "AGUA DULCE",
+        domicilio: "Calle De Leñeros, 25",
+        domicilioAlternativo: "Calle De Leñeros 25",
+        municipio: "Madrid",
+        distrito: "Tetuan",
+        postal: "28039",
+        telefono: "914594049",
+        titularidad: "Publico",
+        coords: {
+          lat: 40.45399475097656,
+          lon: -3.7092928886413574
+        }
+      },
+      {
+        area: "Madrid-Sur",
+        codigo: "28044100",
+        tipo: "EEI",
+        centro: "AILANTOS",
+        domicilio: "Plaza Duque De Ahumada, S/n",
+        domicilioAlternativo: "Plaza Duque De Ahumada",
+        municipio: "Valdemoro",
+        distrito: "-",
+        postal: "28341",
+        telefono: "918955900",
+        titularidad: "Publico"
+      }
+    ];
+
+    const statusNode = document.getElementById("status");
+    const listNode = document.getElementById("school-list");
+
+    const map = L.map("map", {
+      zoomControl: true,
+      scrollWheelZoom: true
+    }).setView([40.4168, -3.7038], 10);
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 20
+    }).addTo(map);
+
+    const bounds = L.latLngBounds([]);
+
+    function renderList() {
+      listNode.innerHTML = schools.map((school, index) => `
+        <article class="card">
+          <h2>${index + 1}. ${school.centro}</h2>
+          <p class="meta">${school.tipo} · ${school.municipio}</p>
+          <p class="meta">${school.domicilio}</p>
+          <p class="meta">CP ${school.postal} · Tel. ${school.telefono}</p>
+        </article>
+      `).join("");
+    }
+
+    function updateStatus(text) {
+      statusNode.textContent = text;
+    }
+
+    function buildQueries(school) {
+      const district = school.distrito && school.distrito !== "-" ? `, ${school.distrito}` : "";
+      const rawAddress = school.domicilioAlternativo || school.domicilio;
+      const trimmedAddress = rawAddress.replace(/,?\s*S\/n$/i, "").trim();
+
+      return [
+        `${rawAddress}, ${school.postal} ${school.municipio}${district}, Madrid, Espana`,
+        `${trimmedAddress}, ${school.postal} ${school.municipio}${district}, Madrid, Espana`,
+        `${trimmedAddress}, ${school.municipio}${district}, Madrid, Espana`,
+        `${school.centro}, ${trimmedAddress}, ${school.municipio}, Madrid, Espana`
+      ].filter((query, index, all) => query && all.indexOf(query) === index);
+    }
+
+    async function geocodeQuery(query) {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=es&q=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("La peticion de geocodificacion ha fallado");
+      }
+
+      const results = await response.json();
+      if (!results.length) {
+        return null;
+      }
+
+      return {
+        lat: Number(results[0].lat),
+        lon: Number(results[0].lon)
+      };
+    }
+
+    async function geocodeSchool(school) {
+      if (school.coords) {
+        return school.coords;
+      }
+
+      const queries = buildQueries(school);
+      for (const query of queries) {
+        const result = await geocodeQuery(query);
+        if (result) {
+          return result;
+        }
+      }
+
+      throw new Error(`Sin resultados para ${school.centro}`);
+    }
+
+    function addMarker(school, coords) {
+      const marker = L.circleMarker([coords.lat, coords.lon], {
+        radius: 8,
+        color: "#2f5d62",
+        weight: 2,
+        fillColor: "#5f7f85",
+        fillOpacity: 0.85
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <div>
+          <p class="popup-title">${school.centro}</p>
+          <p class="popup-text">${school.tipo} · ${school.titularidad}</p>
+          <p class="popup-text">${school.domicilio}, ${school.municipio}</p>
+          <p class="popup-text">CP ${school.postal} · Tel. ${school.telefono}</p>
+        </div>
+      `);
+
+      bounds.extend([coords.lat, coords.lon]);
+    }
+
+    async function init() {
+      renderList();
+      updateStatus("Buscando coordenadas de los 5 primeros centros...");
+
+      let resolved = 0;
+      for (const school of schools) {
+        try {
+          const coords = await geocodeSchool(school);
+          addMarker(school, coords);
+          resolved += 1;
+          updateStatus(`Mostrando ${resolved} de ${schools.length} centros.`);
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      if (resolved > 0) {
+        map.fitBounds(bounds.pad(0.2));
+        updateStatus(`Mapa listo. Se han situado ${resolved} centros.`);
+      } else {
+        updateStatus("No se pudieron obtener coordenadas. Revisa la conexion o las direcciones.");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
