@@ -78,6 +78,34 @@
       color: var(--muted);
     }
 
+    .toolbar {
+      display: grid;
+      gap: 10px;
+      margin: 0 0 18px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      box-shadow: inset 0 1px 2px rgba(31, 41, 51, 0.04);
+    }
+
+    .search-input::placeholder {
+      color: #75808a;
+    }
+
+    .results-meta {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
     .list {
       display: grid;
       gap: 12px;
@@ -147,10 +175,20 @@
       <p class="eyebrow">Google Sites + OpenStreetMap</p>
       <h1>Colegios de Madrid</h1>
       <p class="intro">
-        Vista inicial con los 5 primeros centros del fichero CSV. El mapa usa OpenStreetMap
-        con base gris de CARTO y obtiene las coordenadas a partir de la dirección postal.
+        Vista completa de centros del fichero georreferenciado. El mapa usa OpenStreetMap con base
+        gris de CARTO, permite buscar y carga todos los puntos al instante desde un JSON publicado.
       </p>
       <p id="status" class="status">Preparando mapa...</p>
+      <div class="toolbar">
+        <input
+          id="search-input"
+          class="search-input"
+          type="search"
+          placeholder="Buscar por centro, municipio, codigo o tipo"
+          aria-label="Buscar centros"
+        >
+        <p id="results-meta" class="results-meta"></p>
+      </div>
       <section id="school-list" class="list"></section>
     </aside>
     <main id="map" aria-label="Mapa de colegios"></main>
@@ -162,82 +200,26 @@
     crossorigin=""
   ></script>
   <script>
-    const schools = [
-      {
-        area: "Madrid-Oeste",
-        codigo: "28060646",
-        tipo: "EEI",
-        centro: "ACHALAY",
-        domicilio: "Avenida De Isabel De Farnesio, 14",
-        municipio: "Boadilla del Monte",
-        distrito: "-",
-        postal: "28660",
-        telefono: "916326518",
-        titularidad: "Publico"
-      },
-      {
-        area: "Madrid-Este",
-        codigo: "28063027",
-        tipo: "EEI",
-        centro: "ACUARELA",
-        domicilio: "Avenida Del Somorrostro, 193",
-        municipio: "San Fernando de Henares",
-        distrito: "-",
-        postal: "28830",
-        telefono: "916694580",
-        titularidad: "Publico"
-      },
-      {
-        area: "Madrid-Sur",
-        codigo: "28047460",
-        tipo: "EEI",
-        centro: "ADIVINANZAS",
-        domicilio: "Calle De Las Palmeras, 1",
-        municipio: "Alcorcon",
-        distrito: "-",
-        postal: "28922",
-        telefono: "911886061",
-        titularidad: "Publico"
-      },
-      {
-        area: "Madrid-Capital",
-        codigo: "28047551",
-        tipo: "EEI",
-        centro: "AGUA DULCE",
-        domicilio: "Calle De Leñeros, 25",
-        domicilioAlternativo: "Calle De Leñeros 25",
-        municipio: "Madrid",
-        distrito: "Tetuan",
-        postal: "28039",
-        telefono: "914594049",
-        titularidad: "Publico",
-        coords: {
-          lat: 40.45399475097656,
-          lon: -3.7092928886413574
-        }
-      },
-      {
-        area: "Madrid-Sur",
-        codigo: "28044100",
-        tipo: "EEI",
-        centro: "AILANTOS",
-        domicilio: "Plaza Duque De Ahumada, S/n",
-        domicilioAlternativo: "Plaza Duque De Ahumada",
-        municipio: "Valdemoro",
-        distrito: "-",
-        postal: "28341",
-        telefono: "918955900",
-        titularidad: "Publico"
-      }
-    ];
+    const JSON_URL = "./2605-centros-madrid-georef.json";
+    const MAP_CENTER = [40.4168, -3.7038];
+    const INITIAL_ZOOM = 10;
+    const MAX_LIST_RESULTS = 120;
+
+    let schools = [];
+    let filteredSchools = [];
+    let currentQuery = "";
 
     const statusNode = document.getElementById("status");
     const listNode = document.getElementById("school-list");
+    const searchNode = document.getElementById("search-input");
+    const resultsMetaNode = document.getElementById("results-meta");
 
     const map = L.map("map", {
+      preferCanvas: true,
       zoomControl: true,
       scrollWheelZoom: true
-    }).setView([40.4168, -3.7038], 10);
+    }).setView(MAP_CENTER, INITIAL_ZOOM);
+    const markerLayer = L.layerGroup().addTo(map);
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
@@ -245,26 +227,150 @@
       maxZoom: 20
     }).addTo(map);
 
-    const bounds = L.latLngBounds([]);
+    function normalizeText(value) {
+      return (value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+    }
+
+    function parseJsonRows(rows) {
+      return rows.map((row) => {
+        const school = {
+          area: row["AREA TERRITORIAL"] || "",
+          codigo: row["CODIGO CENTRO"] || "",
+          tipo: row["TIPO DE CENTRO"] || "",
+          centro: row["CENTRO"] || "",
+          domicilio: row["DOMICILIO"] || "",
+          municipio: row["MUNICIPIO"] || "",
+          distrito: row["DISTRITO MUNICIPAL"] || "-",
+          postal: row["COD. POSTAL"] || "",
+          telefono: row["TELEFONO"] || "",
+          email: row["EMAIL"] || "",
+          titularidad: row["TITULARIDAD"] || "",
+          fuenteGeo: row.fuente_geo || "",
+          coords: row.latitud !== "" && row.longitud !== "" && row.latitud != null && row.longitud != null
+            ? {
+                lat: Number(row.latitud),
+                lon: Number(row.longitud)
+              }
+            : null
+        };
+
+        school.searchText = normalizeText([
+          school.codigo,
+          school.centro,
+          school.tipo,
+          school.municipio,
+          school.distrito,
+          school.domicilio,
+          school.titularidad
+        ].join(" "));
+
+        return school;
+      });
+    }
 
     function renderList() {
-      listNode.innerHTML = schools.map((school, index) => `
+      const visibleSchools = filteredSchools.slice(0, MAX_LIST_RESULTS);
+      listNode.innerHTML = visibleSchools.map((school, index) => `
         <article class="card">
           <h2>${index + 1}. ${school.centro}</h2>
           <p class="meta">${school.tipo} · ${school.municipio}</p>
           <p class="meta">${school.domicilio}</p>
-          <p class="meta">CP ${school.postal} · Tel. ${school.telefono}</p>
+          <p class="meta">CP ${school.postal} · Tel. ${school.telefono || "Sin telefono"}</p>
+          <p class="meta">Codigo ${school.codigo} · ${school.titularidad || "Sin dato"}</p>
         </article>
       `).join("");
+
+      if (!visibleSchools.length) {
+        listNode.innerHTML = `
+          <article class="card">
+            <h2>Sin resultados</h2>
+            <p class="meta">Prueba otro termino de busqueda.</p>
+          </article>
+        `;
+      }
+
+      const hiddenCount = Math.max(filteredSchools.length - visibleSchools.length, 0);
+      resultsMetaNode.textContent = hiddenCount > 0
+        ? `Coincidencias: ${filteredSchools.length}. Se muestran las primeras ${visibleSchools.length}.`
+        : `Coincidencias: ${filteredSchools.length}.`;
     }
 
     function updateStatus(text) {
       statusNode.textContent = text;
     }
 
+    function getVisibleGeocodedSchools() {
+      return filteredSchools.filter((school) => school.coords);
+    }
+
+    function focusMapOnVisibleMarkers() {
+      const visible = getVisibleGeocodedSchools();
+      if (!visible.length) {
+        map.setView(MAP_CENTER, INITIAL_ZOOM);
+        return;
+      }
+
+      const bounds = L.latLngBounds(visible.map((school) => [school.coords.lat, school.coords.lon]));
+      map.fitBounds(bounds.pad(0.18));
+    }
+
+    function popupHtml(school) {
+      return `
+        <div>
+          <p class="popup-title">${school.centro}</p>
+          <p class="popup-text">${school.tipo} · ${school.titularidad || "Sin dato"}</p>
+          <p class="popup-text">${school.domicilio}, ${school.municipio}</p>
+          <p class="popup-text">CP ${school.postal} · Tel. ${school.telefono || "Sin telefono"}</p>
+          <p class="popup-text">Geo: ${school.fuenteGeo || "sin dato"}</p>
+        </div>
+      `;
+    }
+
+    function renderMarkers(shouldFit = false) {
+      markerLayer.clearLayers();
+
+      for (const school of getVisibleGeocodedSchools()) {
+        L.circleMarker([school.coords.lat, school.coords.lon], {
+          radius: 4,
+          color: "#2f5d62",
+          weight: 1,
+          fillColor: "#5f7f85",
+          fillOpacity: 0.78,
+          renderer: L.canvas()
+        })
+          .bindPopup(popupHtml(school))
+          .addTo(markerLayer);
+      }
+
+      if (shouldFit) {
+        focusMapOnVisibleMarkers();
+      }
+    }
+
+    function applyFilter(shouldFit = false) {
+      const normalizedQuery = normalizeText(currentQuery);
+      const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+      const collapsedQuery = normalizedQuery.replace(/\s+/g, "");
+
+      filteredSchools = queryTokens.length
+        ? schools.filter((school) => {
+            const collapsedSearch = school.searchText.replace(/\s+/g, "");
+            return queryTokens.every((token) => school.searchText.includes(token) || collapsedSearch.includes(token))
+              || collapsedSearch.includes(collapsedQuery);
+          })
+        : schools.slice();
+
+      renderList();
+      renderMarkers(shouldFit);
+    }
+
     function buildQueries(school) {
       const district = school.distrito && school.distrito !== "-" ? `, ${school.distrito}` : "";
-      const rawAddress = school.domicilioAlternativo || school.domicilio;
+      const rawAddress = school.domicilio;
       const trimmedAddress = rawAddress.replace(/,?\s*S\/n$/i, "").trim();
 
       return [
@@ -314,48 +420,40 @@
       throw new Error(`Sin resultados para ${school.centro}`);
     }
 
-    function addMarker(school, coords) {
-      const marker = L.circleMarker([coords.lat, coords.lon], {
-        radius: 8,
-        color: "#2f5d62",
-        weight: 2,
-        fillColor: "#5f7f85",
-        fillOpacity: 0.85
-      }).addTo(map);
+    function wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
 
-      marker.bindPopup(`
-        <div>
-          <p class="popup-title">${school.centro}</p>
-          <p class="popup-text">${school.tipo} · ${school.titularidad}</p>
-          <p class="popup-text">${school.domicilio}, ${school.municipio}</p>
-          <p class="popup-text">CP ${school.postal} · Tel. ${school.telefono}</p>
-        </div>
-      `);
+    function attachEvents() {
+      searchNode.addEventListener("input", (event) => {
+        currentQuery = event.target.value;
+        applyFilter(true);
+      });
+    }
 
-      bounds.extend([coords.lat, coords.lon]);
+    async function loadSchools() {
+      const response = await fetch(JSON_URL);
+      if (!response.ok) {
+        throw new Error("No se pudo cargar el JSON georreferenciado.");
+      }
+
+      const rows = await response.json();
+      return parseJsonRows(rows);
     }
 
     async function init() {
-      renderList();
-      updateStatus("Buscando coordenadas de los 5 primeros centros...");
+      attachEvents();
+      updateStatus("Cargando centros desde el JSON georreferenciado...");
 
-      let resolved = 0;
-      for (const school of schools) {
-        try {
-          const coords = await geocodeSchool(school);
-          addMarker(school, coords);
-          resolved += 1;
-          updateStatus(`Mostrando ${resolved} de ${schools.length} centros.`);
-        } catch (error) {
-          console.error(error);
-        }
-      }
-
-      if (resolved > 0) {
-        map.fitBounds(bounds.pad(0.2));
-        updateStatus(`Mapa listo. Se han situado ${resolved} centros.`);
-      } else {
-        updateStatus("No se pudieron obtener coordenadas. Revisa la conexion o las direcciones.");
+      try {
+        schools = await loadSchools();
+        filteredSchools = schools.slice();
+        applyFilter(true);
+        const geocodedCount = schools.filter((school) => school.coords).length;
+        updateStatus(`Mapa listo. Centros: ${schools.length}. Coordenadas cargadas: ${geocodedCount}.`);
+      } catch (error) {
+        console.error(error);
+        updateStatus("No se pudo cargar el mapa. Revisa que el JSON publicado este disponible.");
       }
     }
 
