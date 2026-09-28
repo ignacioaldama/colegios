@@ -1336,7 +1336,7 @@
       // Muestra solo los tipos presentes en los datos, ordenados alfabeticamente.
       const presentes = [...new Set(schools.map((s) => s.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
       tiposBody.innerHTML = presentes
-        .map((code) => `<dt>${escapeHtml(code)}</dt><dd>${escapeHtml(TIPOS_INFO[code] || "Tipo de centro educativo.")}</dd>`)
+        .map((code) => `<dt>${iconForTipo(code)} ${escapeHtml(code)}</dt><dd>${escapeHtml(TIPOS_INFO[code] || "Tipo de centro educativo.")}</dd>`)
         .join("");
       tiposOverlay.hidden = false;
     }
@@ -1555,14 +1555,14 @@
       renderMarkers(renderGen, filteredSchools, shouldFit);
     }
 
-    function fillSelect(selectNode, values, selected) {
+    function fillSelect(selectNode, values, selected, labelFn) {
       const placeholder = selectNode.options[0];
       selectNode.innerHTML = "";
       selectNode.appendChild(placeholder);
       for (const value of values) {
         const option = document.createElement("option");
         option.value = value;
-        option.textContent = value;
+        option.textContent = labelFn ? labelFn(value) : value;
         if (value === selected) option.selected = true;
         selectNode.appendChild(option);
       }
@@ -1573,7 +1573,7 @@
       fillSelect(areaNode, areas, currentArea);
 
       const tipos = [...new Set(schools.map((s) => s.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
-      fillSelect(tipoNode, tipos, currentTipo);
+      fillSelect(tipoNode, tipos, currentTipo, (v) => `${iconForTipo(v)} ${v}`);
 
       refreshMunicipios();
     }
