@@ -67,6 +67,28 @@
       border-bottom: 1px solid var(--border);
     }
 
+    .leyenda {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .leyenda-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .leyenda-punto {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
     .eyebrow {
       margin: 0 0 10px;
       font-size: 12px;
@@ -167,6 +189,21 @@
       transform: translateY(-2px);
       box-shadow: 0 12px 30px rgba(31, 41, 51, 0.14);
       outline: none;
+    }
+
+    .card--publico {
+      background: #eef8f1;
+      border-left: 5px solid #33a457;
+    }
+
+    .card--concertado {
+      background: #eaf2fc;
+      border-left: 5px solid #3d84d6;
+    }
+
+    .card--privado {
+      background: #fdf3e8;
+      border-left: 5px solid #f0932b;
     }
 
     .ficha-overlay {
@@ -619,6 +656,11 @@
         </div>
         <button id="reset-filters" type="button" class="reset-btn">Limpiar filtros</button>
       </div>
+      <div class="leyenda">
+        <span class="leyenda-item"><span class="leyenda-punto" style="background:#33a457"></span>Publico</span>
+        <span class="leyenda-item"><span class="leyenda-punto" style="background:#3d84d6"></span>Concertado</span>
+        <span class="leyenda-item"><span class="leyenda-punto" style="background:#f0932b"></span>Privado</span>
+      </div>
     </section>
     <main id="map" aria-label="Mapa de colegios">
       <div id="map-loading" class="map-loading" hidden>
@@ -852,7 +894,7 @@
     function renderList() {
       const visibleSchools = filteredSchools.slice(0, MAX_LIST_RESULTS);
       listNode.innerHTML = visibleSchools.map((school, index) => `
-        <article class="card" data-idx="${index}" role="button" tabindex="0">
+        <article class="card ${cardClass(school.titularidad)}" data-idx="${index}" role="button" tabindex="0">
           <h2>${index + 1}. ${school.centro}</h2>
           <p class="meta">${school.tipo} · ${school.municipio}</p>
           <p class="meta">${school.domicilio}</p>
@@ -1181,12 +1223,13 @@
 
         const chunk = geocoded.slice(i, i + CHUNK_SIZE);
         for (const school of chunk) {
+          const tint = colorFor(school.titularidad);
           const marker = L.circleMarker([school.coords.lat, school.coords.lon], {
-            radius: 4,
-            color: "#2f5d62",
-            weight: 1,
-            fillColor: "#5f7f85",
-            fillOpacity: 0.78
+            radius: 6,
+            color: tint.stroke,
+            weight: 1.5,
+            fillColor: tint.fill,
+            fillOpacity: 0.9
           });
           marker.on("click", () => openFicha(school));
           markers.push(marker);
@@ -1204,6 +1247,21 @@
       markerLayer.addLayers(markers);
       hideProgress();
       if (shouldFit) focusMapOnVisibleMarkers();
+    }
+
+    // Color por titularidad: verde publico, azul concertado, naranja privado.
+    function colorFor(titularidad) {
+      if (titularidad === "Público") return { stroke: "#1b7f3b", fill: "#33a457" };
+      if (titularidad === "Privado Concertado") return { stroke: "#1c5fb0", fill: "#3d84d6" };
+      if (titularidad === "Privado") return { stroke: "#c76a12", fill: "#f0932b" };
+      return { stroke: "#2f5d62", fill: "#5f7f85" };
+    }
+
+    function cardClass(titularidad) {
+      if (titularidad === "Público") return "card--publico";
+      if (titularidad === "Privado Concertado") return "card--concertado";
+      if (titularidad === "Privado") return "card--privado";
+      return "";
     }
 
     function voteStats(codigo) {
