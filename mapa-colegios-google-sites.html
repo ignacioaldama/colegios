@@ -451,6 +451,29 @@
     const INITIAL_ZOOM = 10;
     const MAX_LIST_RESULTS = 120;
 
+    // Etiquetas legibles y orden de todos los campos del registro para la ficha.
+    const FIELD_LABELS = {
+      "CENTRO": "Centro",
+      "CODIGO CENTRO": "Codigo de centro",
+      "TIPO DE CENTRO": "Tipo de centro",
+      "TITULARIDAD": "Titularidad",
+      "AREA TERRITORIAL": "Area territorial",
+      "MUNICIPIO": "Municipio",
+      "DISTRITO MUNICIPAL": "Distrito municipal",
+      "DOMICILIO": "Domicilio",
+      "COD. POSTAL": "Codigo postal",
+      "TELEFONO": "Telefono",
+      "FAX": "Fax",
+      "EMAIL": "Email",
+      "EMAIL2": "Email secundario",
+      "latitud": "Latitud",
+      "longitud": "Longitud",
+      "fuente_geo": "Fuente de geolocalizacion",
+      "geocoder_score": "Precision geocoder",
+      "geocoder_match_address": "Direccion detectada"
+    };
+    const FIELD_ORDER = Object.keys(FIELD_LABELS);
+
     let schools = [];
     let filteredSchools = [];
     let currentQuery = "";
@@ -634,39 +657,32 @@
       return value == null || value === "" || value === "-";
     }
 
+    function hrefForField(key, value) {
+      if (key === "EMAIL" || key === "EMAIL2") return `mailto:${value}`;
+      if (key === "TELEFONO" || key === "FAX") return `tel:${String(value).replace(/\s+/g, "")}`;
+      return null;
+    }
+
     function openFicha(school) {
       const raw = school.raw || {};
-      fichaTitle.textContent = school.centro || "Centro";
+      fichaTitle.textContent = school.centro || raw["CENTRO"] || "Centro";
       fichaSub.textContent = [school.tipo, school.titularidad, school.municipio]
         .filter((v) => !isEmptyValue(v))
         .join(" · ");
 
-      const rows = [
-        ["Codigo de centro", school.codigo],
-        ["Tipo de centro", school.tipo],
-        ["Titularidad", school.titularidad],
-        ["Area territorial", school.area],
-        ["Municipio", school.municipio],
-        ["Distrito municipal", school.distrito],
-        ["Domicilio", school.domicilio],
-        ["Codigo postal", school.postal],
-        ["Telefono", school.telefono, school.telefono ? `tel:${String(school.telefono).replace(/\s+/g, "")}` : null],
-        ["Fax", raw["FAX"]],
-        ["Email", school.email, school.email ? `mailto:${school.email}` : null],
-        ["Email 2", raw["EMAIL2"], raw["EMAIL2"] && !isEmptyValue(raw["EMAIL2"]) ? `mailto:${raw["EMAIL2"]}` : null],
-        ["Coordenadas", school.coords ? `${school.coords.lat.toFixed(6)}, ${school.coords.lon.toFixed(6)}` : ""],
-        ["Fuente de geolocalizacion", school.fuenteGeo],
-        ["Precision geocoder", raw["geocoder_score"]],
-        ["Direccion detectada", raw["geocoder_match_address"]]
+      // Muestra todos los campos: primero los conocidos en orden, luego cualquier extra.
+      const orderedKeys = [
+        ...FIELD_ORDER.filter((key) => key in raw),
+        ...Object.keys(raw).filter((key) => !FIELD_ORDER.includes(key))
       ];
 
-      fichaBody.innerHTML = rows
-        .filter(([, value]) => !isEmptyValue(value))
-        .map(([label, value, href]) => {
-          const safeValue = escapeHtml(value);
-          const rendered = href
-            ? `<a href="${escapeHtml(href)}">${safeValue}</a>`
-            : safeValue;
+      fichaBody.innerHTML = orderedKeys
+        .filter((key) => key !== "CENTRO" && !isEmptyValue(raw[key]))
+        .map((key) => {
+          const label = FIELD_LABELS[key] || key;
+          const href = hrefForField(key, raw[key]);
+          const value = escapeHtml(raw[key]);
+          const rendered = href ? `<a href="${escapeHtml(href)}">${value}</a>` : value;
           return `<dt>${escapeHtml(label)}</dt><dd>${rendered}</dd>`;
         })
         .join("");
