@@ -10,6 +10,16 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   >
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    crossorigin=""
+  >
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    crossorigin=""
+  >
   <style>
     :root {
       --bg: #eef1f4;
@@ -229,6 +239,12 @@
           placeholder="Buscar por centro, municipio, codigo o tipo"
           aria-label="Buscar centros"
         >
+        <select id="area-select" class="search-input" aria-label="Filtrar por area territorial">
+          <option value="">Todas las areas</option>
+        </select>
+        <select id="municipio-select" class="search-input" aria-label="Filtrar por municipio">
+          <option value="">Todos los municipios</option>
+        </select>
         <p id="results-meta" class="results-meta"></p>
       </div>
       <section id="school-list" class="list"></section>
@@ -241,6 +257,10 @@
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
+  <script
+    src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+    crossorigin=""
+  ></script>
   <script>
     const JSON_URL = "./2605-centros-madrid-georef.json";
     const MAP_CENTER = [40.4168, -3.7038];
@@ -250,10 +270,14 @@
     let schools = [];
     let filteredSchools = [];
     let currentQuery = "";
+    let currentArea = "";
+    let currentMunicipio = "";
 
     const statusNode = document.getElementById("status");
     const listNode = document.getElementById("school-list");
     const searchNode = document.getElementById("search-input");
+    const areaNode = document.getElementById("area-select");
+    const municipioNode = document.getElementById("municipio-select");
     const resultsMetaNode = document.getElementById("results-meta");
     const progressWrap = document.getElementById("progress-wrap");
     const progressFill = document.getElementById("progress-fill");
@@ -261,14 +285,23 @@
 
     const CHUNK_SIZE = 300;
     let renderGen = 0;
-    const sharedCanvas = L.canvas({ padding: 0.5 });
 
     const map = L.map("map", {
       preferCanvas: true,
       zoomControl: true,
       scrollWheelZoom: true
     }).setView(MAP_CENTER, INITIAL_ZOOM);
-    const markerLayer = L.layerGroup().addTo(map);
+
+    // Agrupa por zonas y muestra mas detalle al hacer zoom.
+    const markerLayer = L.markerClusterGroup({
+      chunkedLoading: true,
+      chunkInterval: 100,
+      chunkDelay: 0,
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      disableClusteringAtZoom: 17,
+      removeOutsideVisibleBounds: true
+    }).addTo(map);
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
@@ -402,32 +435,34 @@
         return;
       }
 
+      // Crea los marcadores en bloques (sin bloquear el hilo) y los inserta en masa.
+      const markers = [];
       for (let i = 0; i < total; i += CHUNK_SIZE) {
         if (gen !== renderGen) return;
 
         const chunk = geocoded.slice(i, i + CHUNK_SIZE);
         for (const school of chunk) {
-          L.circleMarker([school.coords.lat, school.coords.lon], {
+          const marker = L.circleMarker([school.coords.lat, school.coords.lon], {
             radius: 4,
             color: "#2f5d62",
             weight: 1,
             fillColor: "#5f7f85",
-            fillOpacity: 0.78,
-            renderer: sharedCanvas
-          })
-            .bindPopup(popupHtml(school))
-            .addTo(markerLayer);
+            fillOpacity: 0.78
+          });
+          marker.bindPopup(() => popupHtml(school));
+          markers.push(marker);
         }
 
         const done = Math.min(i + CHUNK_SIZE, total);
         const pct = Math.round((done / total) * 100);
-        showProgress(pct, `Pintando centros\u2026 ${done} de ${total}`);
+        showProgress(pct, `Preparando centros\u2026 ${done} de ${total}`);
 
         // Cede el hilo al navegador entre trozos
         await new Promise((r) => setTimeout(r, 0));
       }
 
       if (gen !== renderGen) return;
+      markerLayer.addLayers(markers);
       hideProgress();
       if (shouldFit) focusMapOnVisibleMarkers();
     }
@@ -437,17 +472,49 @@
       const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
       const collapsedQuery = normalizedQuery.replace(/\s+/g, "");
 
-      filteredSchools = queryTokens.length
-        ? schools.filter((school) => {
-            const collapsedSearch = school.searchText.replace(/\s+/g, "");
-            return queryTokens.every((token) => school.searchText.includes(token) || collapsedSearch.includes(token))
-              || collapsedSearch.includes(collapsedQuery);
-          })
-        : schools.slice();
+      filteredSchools = schools.filter((school) => {
+        if (currentArea && school.area !== currentArea) return false;
+        if (currentMunicipio && school.municipio !== currentMunicipio) return false;
+        if (!queryTokens.length) return true;
+
+        const collapsedSearch = school.searchText.replace(/\s+/g, "");
+        return queryTokens.every((token) => school.searchText.includes(token) || collapsedSearch.includes(token))
+          || collapsedSearch.includes(collapsedQuery);
+      });
 
       renderList();
       renderGen++;
       renderMarkers(renderGen, filteredSchools, shouldFit);
+    }
+
+    function fillSelect(selectNode, values, selected) {
+      const placeholder = selectNode.options[0];
+      selectNode.innerHTML = "";
+      selectNode.appendChild(placeholder);
+      for (const value of values) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        if (value === selected) option.selected = true;
+        selectNode.appendChild(option);
+      }
+    }
+
+    function populateFilters() {
+      const areas = [...new Set(schools.map((s) => s.area).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+      fillSelect(areaNode, areas, currentArea);
+      refreshMunicipios();
+    }
+
+    function refreshMunicipios() {
+      const municipios = [...new Set(
+        schools
+          .filter((s) => !currentArea || s.area === currentArea)
+          .map((s) => s.municipio)
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b, "es"));
+      if (currentMunicipio && !municipios.includes(currentMunicipio)) currentMunicipio = "";
+      fillSelect(municipioNode, municipios, currentMunicipio);
     }
 
     function buildQueries(school) {
@@ -511,6 +578,17 @@
         currentQuery = event.target.value;
         applyFilter(true);
       });
+
+      areaNode.addEventListener("change", (event) => {
+        currentArea = event.target.value;
+        refreshMunicipios();
+        applyFilter(true);
+      });
+
+      municipioNode.addEventListener("change", (event) => {
+        currentMunicipio = event.target.value;
+        applyFilter(true);
+      });
     }
 
     async function loadSchools() {
@@ -534,6 +612,7 @@
         schools = await loadSchools();
         progressFill.classList.remove("indeterminate");
         filteredSchools = schools.slice();
+        populateFilters();
         applyFilter(true);
         const geocodedCount = schools.filter((school) => school.coords).length;
         updateStatus(`Mapa listo. Centros: ${schools.length}. Coordenadas: ${geocodedCount}.`);
