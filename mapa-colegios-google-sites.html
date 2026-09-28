@@ -569,7 +569,7 @@
     const JSON_URL = "./2605-centros-madrid-georef.json";
     // Pega aqui la URL /exec de tu Google Apps Script para votos compartidos.
     // Si se deja vacio, usa el servidor local (server.py) o el navegador.
-    const VOTES_ENDPOINT = "";
+    const VOTES_ENDPOINT = "https://script.google.com/macros/s/AKfycbysgxQtncUP9UXrqzjBshJKywHreeTX6LKP6SW5rjy--rg1G12uefRCNzKg5ZFChQIL6g/exec";
     const MAP_CENTER = [40.4168, -3.7038];
     const INITIAL_ZOOM = 10;
     const MAX_LIST_RESULTS = 120;
@@ -1287,10 +1287,33 @@
       return parseJsonRows(rows);
     }
 
+    function loadVotesJsonp(url) {
+      // Lectura por JSONP para esquivar el CORS de Google Apps Script.
+      return new Promise((resolve) => {
+        const callback = "votosCb_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+        const script = document.createElement("script");
+        let done = false;
+        const cleanup = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          delete window[callback];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        };
+        const timer = setTimeout(() => { cleanup(); resolve({}); }, 8000);
+        window[callback] = (data) => { cleanup(); resolve(data || {}); };
+        script.onerror = () => { cleanup(); resolve({}); };
+        script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callback;
+        document.head.appendChild(script);
+      });
+    }
+
     async function loadCommunityVotes() {
-      const source = VOTES_ENDPOINT || "votacion.json";
+      if (VOTES_ENDPOINT) {
+        return loadVotesJsonp(VOTES_ENDPOINT);
+      }
       try {
-        const response = await fetch(source, { cache: "no-store" });
+        const response = await fetch("votacion.json", { cache: "no-store" });
         if (response.ok) return await response.json();
       } catch (error) {
         // Sin fichero de votacion accesible: se empieza vacio.
@@ -1308,12 +1331,13 @@
       try {
         schools = await loadSchools();
         setIndeterminate(false);
-        communityVotes = await loadCommunityVotes();
         filteredSchools = schools.slice();
         populateFilters();
         applyFilter(true);
         const geocodedCount = schools.filter((school) => school.coords).length;
         updateStatus(`Mapa listo. Centros: ${schools.length}. Coordenadas: ${geocodedCount}.`);
+        // Los votos compartidos se cargan en segundo plano para no bloquear el mapa.
+        loadCommunityVotes().then((votes) => { communityVotes = votes; });
       } catch (error) {
         console.error(error);
         hideProgress();

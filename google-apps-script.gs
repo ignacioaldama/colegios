@@ -44,8 +44,17 @@ function jsonOutput(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function doGet() {
-  return jsonOutput(readAll(getSheet()));
+function doGet(e) {
+  const data = readAll(getSheet());
+  const json = JSON.stringify(data);
+  // JSONP: si llega ?callback=xxx se devuelve JavaScript para evitar CORS al leer.
+  const callback = e && e.parameter && e.parameter.callback;
+  if (callback) {
+    return ContentService.createTextOutput(callback + "(" + json + ")")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
