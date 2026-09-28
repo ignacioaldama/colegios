@@ -61,6 +61,12 @@
       background: var(--panel);
     }
 
+    .filtros {
+      padding: 0 24px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+
     .eyebrow {
       margin: 0 0 10px;
       font-size: 12px;
@@ -537,15 +543,7 @@
         <p id="progress-text" class="progress-text"></p>
       </div>
     </header>
-    <main id="map" aria-label="Mapa de colegios">
-      <div id="map-loading" class="map-loading" hidden>
-        <div class="progress-track">
-          <div id="progress-fill-map" class="progress-fill"></div>
-        </div>
-        <p id="progress-text-map" class="progress-text">Cargando colegios...</p>
-      </div>
-    </main>
-    <section class="panel">
+    <section class="filtros">
       <div class="toolbar">
         <input
           id="search-input"
@@ -567,10 +565,32 @@
           <select id="titularidad-select" class="search-input" aria-label="Filtrar por titularidad">
             <option value="">Todas las titularidades</option>
           </select>
+          <select id="votos-select" class="search-input" aria-label="Filtrar por numero de votos">
+            <option value="0">Cualquier numero de votos</option>
+            <option value="1">Con votos (1+)</option>
+            <option value="5">5 votos o mas</option>
+            <option value="10">10 votos o mas</option>
+          </select>
+          <select id="valoracion-select" class="search-input" aria-label="Filtrar por valoracion">
+            <option value="0">Cualquier valoracion</option>
+            <option value="2">2 estrellas o mas</option>
+            <option value="3">3 estrellas o mas</option>
+            <option value="4">4 estrellas o mas</option>
+          </select>
         </div>
         <button id="reset-filters" type="button" class="reset-btn">Limpiar filtros</button>
-        <p id="results-meta" class="results-meta"></p>
       </div>
+    </section>
+    <main id="map" aria-label="Mapa de colegios">
+      <div id="map-loading" class="map-loading" hidden>
+        <div class="progress-track">
+          <div id="progress-fill-map" class="progress-fill"></div>
+        </div>
+        <p id="progress-text-map" class="progress-text">Cargando colegios...</p>
+      </div>
+    </main>
+    <section class="panel">
+      <p id="results-meta" class="results-meta"></p>
       <section id="school-list" class="list"></section>
     </section>
   </div>
@@ -674,6 +694,8 @@
     let currentMunicipio = "";
     let currentTipo = "";
     let currentTitularidad = "";
+    let currentVotosMin = 0;
+    let currentValoracionMin = 0;
     let communityVotes = {};
 
     const statusNode = document.getElementById("status");
@@ -683,6 +705,8 @@
     const municipioNode = document.getElementById("municipio-select");
     const tipoNode = document.getElementById("tipo-select");
     const titularidadNode = document.getElementById("titularidad-select");
+    const votosNode = document.getElementById("votos-select");
+    const valoracionNode = document.getElementById("valoracion-select");
     const resetNode = document.getElementById("reset-filters");
     const resultsMetaNode = document.getElementById("results-meta");
     const fichaOverlay = document.getElementById("ficha-overlay");
@@ -1128,16 +1152,38 @@
       if (shouldFit) focusMapOnVisibleMarkers();
     }
 
+    function voteStats(codigo) {
+      const cats = communityVotes[codigo];
+      if (!cats) return { voters: 0, avg: 0 };
+      let voters = 0;
+      let sum = 0;
+      let count = 0;
+      for (const key in cats) {
+        voters = Math.max(voters, Number(cats[key].count) || 0);
+        sum += Number(cats[key].sum) || 0;
+        count += Number(cats[key].count) || 0;
+      }
+      return { voters, avg: count ? sum / count : 0 };
+    }
+
     function applyFilter(shouldFit = false) {
       const normalizedQuery = normalizeText(currentQuery);
       const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
       const collapsedQuery = normalizedQuery.replace(/\s+/g, "");
+      const filtraVotos = currentVotosMin > 0 || currentValoracionMin > 0;
 
       filteredSchools = schools.filter((school) => {
         if (currentArea && school.area !== currentArea) return false;
         if (currentMunicipio && school.municipio !== currentMunicipio) return false;
         if (currentTipo && school.tipo !== currentTipo) return false;
         if (currentTitularidad && school.titularidad !== currentTitularidad) return false;
+
+        if (filtraVotos) {
+          const stats = voteStats(school.codigo);
+          if (currentVotosMin > 0 && stats.voters < currentVotosMin) return false;
+          if (currentValoracionMin > 0 && stats.avg < currentValoracionMin) return false;
+        }
+
         if (!queryTokens.length) return true;
 
         const collapsedSearch = school.searchText.replace(/\s+/g, "");
@@ -1270,13 +1316,27 @@
         applyFilter(true);
       });
 
+      votosNode.addEventListener("change", (event) => {
+        currentVotosMin = Number(event.target.value) || 0;
+        applyFilter(true);
+      });
+
+      valoracionNode.addEventListener("change", (event) => {
+        currentValoracionMin = Number(event.target.value) || 0;
+        applyFilter(true);
+      });
+
       resetNode.addEventListener("click", () => {
         currentQuery = "";
         currentArea = "";
         currentMunicipio = "";
         currentTipo = "";
         currentTitularidad = "";
+        currentVotosMin = 0;
+        currentValoracionMin = 0;
         searchNode.value = "";
+        votosNode.value = "0";
+        valoracionNode.value = "0";
         populateFilters();
         applyFilter(true);
       });
@@ -1397,7 +1457,10 @@
         const geocodedCount = schools.filter((school) => school.coords).length;
         updateStatus(`Mapa listo. Centros: ${schools.length}. Coordenadas: ${geocodedCount}.`);
         // Los votos compartidos se cargan en segundo plano para no bloquear el mapa.
-        loadCommunityVotes().then((votes) => { communityVotes = votes; });
+        loadCommunityVotes().then((votes) => {
+          communityVotes = votes;
+          if (currentVotosMin > 0 || currentValoracionMin > 0) applyFilter(false);
+        });
       } catch (error) {
         console.error(error);
         hideProgress();
