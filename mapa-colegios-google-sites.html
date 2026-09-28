@@ -50,11 +50,15 @@
     }
 
     .panel {
-      order: 2;
       padding: 24px;
       background: var(--panel);
       border-top: 1px solid var(--border);
       backdrop-filter: blur(10px);
+    }
+
+    .intro-block {
+      padding: 24px 24px 16px;
+      background: var(--panel);
     }
 
     .eyebrow {
@@ -92,6 +96,27 @@
       display: grid;
       gap: 10px;
       margin: 0 0 18px;
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .reset-btn {
+      justify-self: start;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--accent);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .reset-btn:hover {
+      background: #f3f5f7;
     }
 
     .search-input {
@@ -143,7 +168,6 @@
     }
 
     #map {
-      order: 1;
       min-height: 70vh;
       height: 70vh;
       width: 100%;
@@ -237,7 +261,7 @@
 </head>
 <body>
   <div class="layout">
-    <aside class="panel">
+    <header class="intro-block">
       <p class="eyebrow">Google Sites + OpenStreetMap</p>
       <h1>Colegios de Madrid</h1>
       <p class="intro">
@@ -251,24 +275,7 @@
         </div>
         <p id="progress-text" class="progress-text"></p>
       </div>
-      <div class="toolbar">
-        <input
-          id="search-input"
-          class="search-input"
-          type="search"
-          placeholder="Buscar por centro, municipio, codigo o tipo"
-          aria-label="Buscar centros"
-        >
-        <select id="area-select" class="search-input" aria-label="Filtrar por area territorial">
-          <option value="">Todas las areas</option>
-        </select>
-        <select id="municipio-select" class="search-input" aria-label="Filtrar por municipio">
-          <option value="">Todos los municipios</option>
-        </select>
-        <p id="results-meta" class="results-meta"></p>
-      </div>
-      <section id="school-list" class="list"></section>
-    </aside>
+    </header>
     <main id="map" aria-label="Mapa de colegios">
       <div id="map-loading" class="map-loading" hidden>
         <div class="progress-track">
@@ -277,6 +284,34 @@
         <p id="progress-text-map" class="progress-text">Cargando colegios...</p>
       </div>
     </main>
+    <section class="panel">
+      <div class="toolbar">
+        <input
+          id="search-input"
+          class="search-input"
+          type="search"
+          placeholder="Buscar por centro, municipio, codigo o tipo"
+          aria-label="Buscar centros"
+        >
+        <div class="filter-grid">
+          <select id="area-select" class="search-input" aria-label="Filtrar por area territorial">
+            <option value="">Todas las areas</option>
+          </select>
+          <select id="municipio-select" class="search-input" aria-label="Filtrar por municipio">
+            <option value="">Todos los municipios</option>
+          </select>
+          <select id="tipo-select" class="search-input" aria-label="Filtrar por tipo de centro">
+            <option value="">Todos los tipos</option>
+          </select>
+          <select id="titularidad-select" class="search-input" aria-label="Filtrar por titularidad">
+            <option value="">Todas las titularidades</option>
+          </select>
+        </div>
+        <button id="reset-filters" type="button" class="reset-btn">Limpiar filtros</button>
+        <p id="results-meta" class="results-meta"></p>
+      </div>
+      <section id="school-list" class="list"></section>
+    </section>
   </div>
 
   <script
@@ -299,12 +334,17 @@
     let currentQuery = "";
     let currentArea = "";
     let currentMunicipio = "";
+    let currentTipo = "";
+    let currentTitularidad = "";
 
     const statusNode = document.getElementById("status");
     const listNode = document.getElementById("school-list");
     const searchNode = document.getElementById("search-input");
     const areaNode = document.getElementById("area-select");
     const municipioNode = document.getElementById("municipio-select");
+    const tipoNode = document.getElementById("tipo-select");
+    const titularidadNode = document.getElementById("titularidad-select");
+    const resetNode = document.getElementById("reset-filters");
     const resultsMetaNode = document.getElementById("results-meta");
     const progressWrap = document.getElementById("progress-wrap");
     const progressFill = document.getElementById("progress-fill");
@@ -320,7 +360,7 @@
       preferCanvas: true,
       zoomControl: true,
       scrollWheelZoom: true,
-      maxZoom: 20
+      maxZoom: 19
     }).setView(MAP_CENTER, INITIAL_ZOOM);
 
     // Agrupa por zonas y muestra mas detalle al hacer zoom.
@@ -334,10 +374,10 @@
       removeOutsideVisibleBounds: true
     }).addTo(map);
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 20
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      subdomains: "abc",
+      maxZoom: 19
     }).addTo(map);
 
     function normalizeText(value) {
@@ -516,6 +556,8 @@
       filteredSchools = schools.filter((school) => {
         if (currentArea && school.area !== currentArea) return false;
         if (currentMunicipio && school.municipio !== currentMunicipio) return false;
+        if (currentTipo && school.tipo !== currentTipo) return false;
+        if (currentTitularidad && school.titularidad !== currentTitularidad) return false;
         if (!queryTokens.length) return true;
 
         const collapsedSearch = school.searchText.replace(/\s+/g, "");
@@ -544,6 +586,13 @@
     function populateFilters() {
       const areas = [...new Set(schools.map((s) => s.area).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
       fillSelect(areaNode, areas, currentArea);
+
+      const tipos = [...new Set(schools.map((s) => s.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+      fillSelect(tipoNode, tipos, currentTipo);
+
+      const titularidades = [...new Set(schools.map((s) => s.titularidad).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+      fillSelect(titularidadNode, titularidades, currentTitularidad);
+
       refreshMunicipios();
     }
 
@@ -628,6 +677,27 @@
 
       municipioNode.addEventListener("change", (event) => {
         currentMunicipio = event.target.value;
+        applyFilter(true);
+      });
+
+      tipoNode.addEventListener("change", (event) => {
+        currentTipo = event.target.value;
+        applyFilter(true);
+      });
+
+      titularidadNode.addEventListener("change", (event) => {
+        currentTitularidad = event.target.value;
+        applyFilter(true);
+      });
+
+      resetNode.addEventListener("click", () => {
+        currentQuery = "";
+        currentArea = "";
+        currentMunicipio = "";
+        currentTipo = "";
+        currentTitularidad = "";
+        searchNode.value = "";
+        populateFilters();
         applyFilter(true);
       });
     }
