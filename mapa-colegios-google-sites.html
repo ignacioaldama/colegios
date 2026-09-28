@@ -1021,7 +1021,7 @@
       listNode.innerHTML = visibleSchools.map((school, index) => `
         <article class="card ${cardClass(school.titularidad)}" data-idx="${index}" role="button" tabindex="0">
           <h2>${index + 1}. ${school.centro}</h2>
-          <p class="meta">${titularidadBadge(school.titularidad)} ${school.tipo} · ${school.municipio}</p>
+          <p class="meta">${titularidadBadge(school.titularidad)} ${iconForTipo(school.tipo)} ${school.tipo} · ${school.municipio}</p>
           <p class="meta">${school.domicilio}</p>
           <p class="meta">CP ${school.postal} · Tel. ${school.telefono || "Sin telefono"}</p>
           <p class="meta">Codigo ${school.codigo}</p>
@@ -1398,6 +1398,31 @@
       if (titularidad === "Privado Concertado") return "card--concertado";
       if (titularidad === "Privado") return "card--privado";
       return "";
+    }
+
+    // Icono segun el tipo de centro (por palabras clave de la sigla).
+    function iconForTipo(tipo) {
+      const t = (tipo || "").toUpperCase();
+      if (t.includes("HOSP")) return "\u{1F3E5}";
+      if (t.includes("MUS") && t.includes("DANZA")) return "\u{1F3B6}";
+      if (t.includes("DANZA")) return "\u{1F483}";
+      if (t.includes("MUS")) return "\u{1F3B5}";
+      if (t.includes("ARTE DRA")) return "\u{1F3AD}";
+      if (t.includes("CANTO")) return "\u{1F3A4}";
+      if (t.includes("DISE") || t.includes("ARTE") || t.includes("CRBC")) return "\u{1F3A8}";
+      if (t.includes("DEP")) return "\u26BD";
+      if (t.includes("EOI")) return "\u{1F5E3}\uFE0F";
+      if (t.includes("FP") || t.includes("EMPLEO") || t.includes("UFIL")) return "\u{1F6E0}\uFE0F";
+      if (t.includes("EPA")) return "\u{1F468}\u200D\u{1F3EB}";
+      if (t.includes("UNIVERSIDAD")) return "\u{1F393}";
+      if (t.includes("MILITAR")) return "\u{1FA96}";
+      if (t.includes("EXTRAN")) return "\u{1F30D}";
+      if (t.includes("EOEP")) return "\u{1F9ED}";
+      if (t.includes(" EE")) return "\u{1F9E9}";
+      if (t.includes("IES") || t.includes("SEC")) return "\u{1F393}";
+      if (t.includes("PRI")) return "\u{1F392}";
+      if (t.includes("INF") || t.includes("EEI") || t.includes("EIPR") || t.includes("CN")) return "\u{1F9F8}";
+      return "\u{1F3EB}";
     }
 
     // Insignia con icono segun titularidad.
