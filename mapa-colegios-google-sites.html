@@ -199,6 +199,28 @@
       color: var(--muted);
     }
 
+    .map-loading {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1200;
+      width: min(420px, calc(100% - 32px));
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 30px rgba(31, 41, 51, 0.18);
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+
+    .map-loading .progress-text {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
     @media (max-width: 860px) {
       .layout {
         grid-template-columns: 1fr;
@@ -249,7 +271,14 @@
       </div>
       <section id="school-list" class="list"></section>
     </aside>
-    <main id="map" aria-label="Mapa de colegios"></main>
+    <main id="map" aria-label="Mapa de colegios">
+      <div id="map-loading" class="map-loading" hidden>
+        <div class="progress-track">
+          <div id="progress-fill-map" class="progress-fill"></div>
+        </div>
+        <p id="progress-text-map" class="progress-text">Cargando colegios...</p>
+      </div>
+    </main>
   </div>
 
   <script
@@ -282,6 +311,9 @@
     const progressWrap = document.getElementById("progress-wrap");
     const progressFill = document.getElementById("progress-fill");
     const progressText = document.getElementById("progress-text");
+    const mapLoading = document.getElementById("map-loading");
+    const progressFillMap = document.getElementById("progress-fill-map");
+    const progressTextMap = document.getElementById("progress-text-map");
 
     const CHUNK_SIZE = 300;
     let renderGen = 0;
@@ -389,12 +421,22 @@
       progressWrap.hidden = false;
       progressFill.style.width = pct + "%";
       progressText.textContent = text;
+      mapLoading.hidden = false;
+      progressFillMap.style.width = pct + "%";
+      progressTextMap.textContent = text;
     }
 
     function hideProgress() {
       progressWrap.hidden = true;
       progressFill.style.width = "0%";
       progressText.textContent = "";
+      mapLoading.hidden = true;
+      progressFillMap.style.width = "0%";
+    }
+
+    function setIndeterminate(on) {
+      progressFill.classList.toggle("indeterminate", on);
+      progressFillMap.classList.toggle("indeterminate", on);
     }
 
     function getVisibleGeocodedSchools() {
@@ -597,20 +639,51 @@
         throw new Error("No se pudo cargar el JSON georreferenciado.");
       }
 
-      const rows = await response.json();
+      const contentLength = Number(response.headers.get("Content-Length")) || 0;
+
+      // Sin cuerpo legible: descarga directa sin barra de porcentaje.
+      if (!response.body || !response.body.getReader) {
+        const rows = await response.json();
+        return parseJsonRows(rows);
+      }
+
+      const reader = response.body.getReader();
+      const chunks = [];
+      let received = 0;
+
+      setIndeterminate(!contentLength);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+
+        if (contentLength) {
+          const pct = Math.round((received / contentLength) * 100);
+          showProgress(pct, `Descargando colegios\u2026 ${pct}%`);
+        } else {
+          const mb = (received / 1048576).toFixed(1);
+          showProgress(0, `Descargando colegios\u2026 ${mb} MB`);
+        }
+      }
+      setIndeterminate(false);
+
+      const blob = new Blob(chunks);
+      const text = await blob.text();
+      const rows = JSON.parse(text);
       return parseJsonRows(rows);
     }
 
     async function init() {
       attachEvents();
       updateStatus("Cargando centros...");
-      progressWrap.hidden = false;
-      progressFill.classList.add("indeterminate");
-      progressText.textContent = "Descargando datos...";
+      // El mapa ya es visible; ajustamos su tamano y mostramos la barra de carga encima.
+      map.invalidateSize();
+      showProgress(0, "Descargando colegios\u2026");
 
       try {
         schools = await loadSchools();
-        progressFill.classList.remove("indeterminate");
+        setIndeterminate(false);
         filteredSchools = schools.slice();
         populateFilters();
         applyFilter(true);
