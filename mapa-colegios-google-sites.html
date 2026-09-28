@@ -451,6 +451,28 @@
       font-style: italic;
     }
 
+    .card-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-weight: 400;
+      font-style: italic;
+    }
+
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(47, 93, 98, 0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     #map {
       min-height: 70vh;
       height: 70vh;
@@ -714,6 +736,7 @@
     let currentVotosMin = 0;
     let currentValoracionMin = 0;
     let communityVotes = {};
+    let votesLoaded = false;
 
     const statusNode = document.getElementById("status");
     const listNode = document.getElementById("school-list");
@@ -814,6 +837,9 @@
     }
 
     function cardRatingHtml(codigo) {
+      if (!votesLoaded) {
+        return `<span class="card-loading"><span class="spinner"></span>Cargando votos\u2026</span>`;
+      }
       const stats = voteStats(codigo);
       if (!stats.voters) {
         return `<span class="card-novotes">Sin votos aun</span>`;
@@ -1449,6 +1475,7 @@
     function refreshCommunityVotes() {
       loadCommunityVotes().then((votes) => {
         communityVotes = votes;
+        votesLoaded = true;
         renderList();
         if (currentVotosMin > 0 || currentValoracionMin > 0) applyFilter(false);
       });
