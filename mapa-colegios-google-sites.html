@@ -278,11 +278,14 @@
     }
 
     .voto-cat {
-      display: grid;
-      grid-template-columns: 110px auto;
-      align-items: center;
-      gap: 4px 12px;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+    }
+
+    .voto-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 2px 8px;
     }
 
     .voto-label {
@@ -290,9 +293,15 @@
       font-weight: 700;
     }
 
+    .voto-legend {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
     .voto-stars {
       display: inline-flex;
       gap: 2px;
+      margin-top: 4px;
     }
 
     .star {
@@ -315,8 +324,7 @@
     }
 
     .voto-desc {
-      grid-column: 2;
-      margin: 0;
+      margin: 2px 0 0;
       min-height: 18px;
       font-size: 13px;
       font-style: italic;
@@ -324,7 +332,6 @@
     }
 
     .voto-media {
-      grid-column: 2;
       margin: 2px 0 0;
       font-size: 12px;
       font-weight: 700;
@@ -513,6 +520,9 @@
   ></script>
   <script>
     const JSON_URL = "./2605-centros-madrid-georef.json";
+    // Pega aqui la URL /exec de tu Google Apps Script para votos compartidos.
+    // Si se deja vacio, usa el servidor local (server.py) o el navegador.
+    const VOTES_ENDPOINT = "";
     const MAP_CENTER = [40.4168, -3.7038];
     const INITIAL_ZOOM = 10;
     const MAX_LIST_RESULTS = 120;
@@ -545,6 +555,7 @@
       {
         key: "comedor",
         label: "Comedor",
+        legend: "El servicio de comedor y la calidad de las comidas",
         descriptions: {
           1: "No lo lleves ahi ni loco",
           2: "No le llevo, no me convence",
@@ -556,6 +567,7 @@
       {
         key: "precio",
         label: "Precio",
+        legend: "La relacion calidad-precio del centro y sus servicios",
         descriptions: {
           1: "No me merece la pena ni gratis",
           2: "No me compensa el precio",
@@ -567,6 +579,7 @@
       {
         key: "profesores",
         label: "Profesores",
+        legend: "La calidad y el trato del profesorado",
         descriptions: {
           1: "No lo lleves ahi ni loco",
           2: "No me gusta casi ninguno",
@@ -800,6 +813,22 @@
     }
 
     async function postVote(codigo, categoria, valor, anterior) {
+      // Google Apps Script: envio sin leer respuesta (evita CORS) y media local optimista.
+      if (VOTES_ENDPOINT) {
+        applyLocalAggregate(codigo, categoria, valor, anterior);
+        try {
+          await fetch(VOTES_ENDPOINT, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ codigo, categoria, valor, anterior })
+          });
+        } catch (error) {
+          // Envio fallido: el voto queda reflejado localmente hasta recargar.
+        }
+        return true;
+      }
+
       try {
         const response = await fetch("api/votacion", {
           method: "POST",
@@ -845,9 +874,19 @@
         const row = document.createElement("div");
         row.className = "voto-cat";
 
+        const head = document.createElement("div");
+        head.className = "voto-head";
+
         const label = document.createElement("span");
         label.className = "voto-label";
         label.textContent = cat.label;
+
+        const legend = document.createElement("span");
+        legend.className = "voto-legend";
+        legend.textContent = cat.legend;
+
+        head.appendChild(label);
+        head.appendChild(legend);
 
         const stars = document.createElement("div");
         stars.className = "voto-stars";
@@ -859,8 +898,9 @@
         media.className = "voto-media";
         media.textContent = averageText(codigo, cat.key);
 
-        const current = Number(votes[cat.key]) || 0;
-        desc.textContent = current ? cat.descriptions[current] : "";
+        // Por defecto todo marcado a 3 estrellas hasta que el usuario vote.
+        const current = Number(votes[cat.key]) || 3;
+        desc.textContent = cat.descriptions[current];
         stars.dataset.selected = current;
 
         for (let value = 1; value <= 5; value += 1) {
@@ -891,12 +931,12 @@
         }
 
         stars.addEventListener("mouseleave", () => {
-          const selected = Number(stars.dataset.selected) || 0;
+          const selected = Number(stars.dataset.selected) || 3;
           highlightStars(stars, selected);
-          desc.textContent = selected ? cat.descriptions[selected] : "";
+          desc.textContent = cat.descriptions[selected] || "";
         });
 
-        row.appendChild(label);
+        row.appendChild(head);
         row.appendChild(stars);
         row.appendChild(desc);
         row.appendChild(media);
@@ -1215,8 +1255,9 @@
     }
 
     async function loadCommunityVotes() {
+      const source = VOTES_ENDPOINT || "votacion.json";
       try {
-        const response = await fetch("votacion.json", { cache: "no-store" });
+        const response = await fetch(source, { cache: "no-store" });
         if (response.ok) return await response.json();
       } catch (error) {
         // Sin fichero de votacion accesible: se empieza vacio.

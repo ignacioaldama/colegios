@@ -1,1 +1,16 @@
-﻿{}
+{
+  "28060646": {
+    "comedor": {
+      "sum": 5,
+      "count": 1
+    },
+    "precio": {
+      "sum": 3,
+      "count": 1
+    },
+    "profesores": {
+      "sum": 3,
+      "count": 1
+    }
+  }
+}
