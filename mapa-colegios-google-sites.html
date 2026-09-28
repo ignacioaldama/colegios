@@ -266,6 +266,63 @@
       background: #244b4f;
     }
 
+    .ficha-votos {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    .votos-title {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .voto-cat {
+      display: grid;
+      grid-template-columns: 110px auto;
+      align-items: center;
+      gap: 4px 12px;
+      margin-bottom: 12px;
+    }
+
+    .voto-label {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .voto-stars {
+      display: inline-flex;
+      gap: 2px;
+    }
+
+    .star {
+      border: 0;
+      background: none;
+      padding: 0 2px;
+      font-size: 24px;
+      line-height: 1;
+      color: #d0d7dc;
+      cursor: pointer;
+      transition: color 0.1s ease, transform 0.1s ease;
+    }
+
+    .star:hover {
+      transform: scale(1.15);
+    }
+
+    .star.on {
+      color: #f5b301;
+    }
+
+    .voto-desc {
+      grid-column: 2;
+      margin: 0;
+      min-height: 18px;
+      font-size: 13px;
+      font-style: italic;
+      color: var(--muted);
+    }
+
     .card h2 {
       margin: 0 0 6px;
       font-size: 16px;
@@ -432,6 +489,7 @@
       <h2 id="ficha-title"></h2>
       <p id="ficha-sub" class="ficha-sub"></p>
       <dl id="ficha-body" class="ficha-body"></dl>
+      <div id="ficha-votos" class="ficha-votos"></div>
       <div id="ficha-actions" class="ficha-actions"></div>
     </div>
   </div>
@@ -474,6 +532,43 @@
     };
     const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
+    // Categorias de votacion con el texto que aparece por cada numero de estrellas.
+    const VOTE_CATEGORIES = [
+      {
+        key: "comedor",
+        label: "Comedor",
+        descriptions: {
+          1: "No lo lleves ahi ni loco",
+          2: "No le llevo, no me convence",
+          3: "Le llevo aunque no sea una maravilla",
+          4: "Mis hijos van al comedor",
+          5: "A mis hijos les gusta el comedor"
+        }
+      },
+      {
+        key: "precio",
+        label: "Precio",
+        descriptions: {
+          1: "No me merece la pena ni gratis",
+          2: "No me compensa el precio",
+          3: "Ok, lo normal para estos servicios",
+          4: "Todo bien",
+          5: "Para lo que obtengo, barato me parece"
+        }
+      },
+      {
+        key: "profesores",
+        label: "Profesores",
+        descriptions: {
+          1: "No lo lleves ahi ni loco",
+          2: "No me gusta casi ninguno",
+          3: "Hay de todo, buenos y malos",
+          4: "Por encima de la media",
+          5: "Mis hijos y yo, encantados en general"
+        }
+      }
+    ];
+
     let schools = [];
     let filteredSchools = [];
     let currentQuery = "";
@@ -495,6 +590,7 @@
     const fichaTitle = document.getElementById("ficha-title");
     const fichaSub = document.getElementById("ficha-sub");
     const fichaBody = document.getElementById("ficha-body");
+    const fichaVotos = document.getElementById("ficha-votos");
     const fichaActions = document.getElementById("ficha-actions");
     const fichaClose = document.getElementById("ficha-close");
     const progressWrap = document.getElementById("progress-wrap");
@@ -663,6 +759,95 @@
       return null;
     }
 
+    function loadVotes(codigo) {
+      try {
+        return JSON.parse(localStorage.getItem("voto:" + codigo)) || {};
+      } catch (error) {
+        return {};
+      }
+    }
+
+    function saveVote(codigo, key, value) {
+      const votes = loadVotes(codigo);
+      votes[key] = value;
+      try {
+        localStorage.setItem("voto:" + codigo, JSON.stringify(votes));
+      } catch (error) {
+        // Almacenamiento no disponible: el voto no se persiste.
+      }
+    }
+
+    function highlightStars(starsEl, count) {
+      starsEl.querySelectorAll(".star").forEach((star, index) => {
+        star.classList.toggle("on", index < count);
+      });
+    }
+
+    function renderVotos(school) {
+      const codigo = school.codigo || (school.raw && school.raw["CODIGO CENTRO"]) || "";
+      const votes = loadVotes(codigo);
+      fichaVotos.innerHTML = "";
+
+      const heading = document.createElement("h3");
+      heading.className = "votos-title";
+      heading.textContent = "Tu valoracion";
+      fichaVotos.appendChild(heading);
+
+      for (const cat of VOTE_CATEGORIES) {
+        const row = document.createElement("div");
+        row.className = "voto-cat";
+
+        const label = document.createElement("span");
+        label.className = "voto-label";
+        label.textContent = cat.label;
+
+        const stars = document.createElement("div");
+        stars.className = "voto-stars";
+
+        const desc = document.createElement("p");
+        desc.className = "voto-desc";
+
+        const current = Number(votes[cat.key]) || 0;
+        desc.textContent = current ? cat.descriptions[current] : "";
+        stars.dataset.selected = current;
+
+        for (let value = 1; value <= 5; value += 1) {
+          const star = document.createElement("button");
+          star.type = "button";
+          star.className = "star" + (value <= current ? " on" : "");
+          star.textContent = "\u2605";
+          star.dataset.value = value;
+          star.setAttribute("aria-label", `${cat.label}: ${value} estrellas - ${cat.descriptions[value]}`);
+
+          const preview = () => {
+            highlightStars(stars, value);
+            desc.textContent = cat.descriptions[value];
+          };
+          star.addEventListener("mouseenter", preview);
+          star.addEventListener("focus", preview);
+          star.addEventListener("click", () => {
+            saveVote(codigo, cat.key, value);
+            stars.dataset.selected = value;
+            highlightStars(stars, value);
+            desc.textContent = cat.descriptions[value];
+          });
+
+          stars.appendChild(star);
+        }
+
+        stars.addEventListener("mouseleave", () => {
+          const selected = Number(stars.dataset.selected) || 0;
+          highlightStars(stars, selected);
+          desc.textContent = selected ? cat.descriptions[selected] : "";
+        });
+
+        row.appendChild(label);
+        row.appendChild(stars);
+        row.appendChild(desc);
+        fichaVotos.appendChild(row);
+      }
+    }
+
     function openFicha(school) {
       const raw = school.raw || {};
       fichaTitle.textContent = school.centro || raw["CENTRO"] || "Centro";
@@ -696,6 +881,8 @@
         actions.push(`<a class="ficha-action" href="mailto:${escapeHtml(school.email)}">Enviar email</a>`);
       }
       fichaActions.innerHTML = actions.join("");
+
+      renderVotos(school);
 
       fichaOverlay.hidden = false;
       document.body.style.overflow = "hidden";
