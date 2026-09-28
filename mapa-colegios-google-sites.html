@@ -152,6 +152,118 @@
       background: #fff;
       border: 1px solid var(--border);
       box-shadow: 0 8px 24px rgba(31, 41, 51, 0.06);
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .card:hover,
+    .card:focus-visible {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(31, 41, 51, 0.14);
+      outline: none;
+    }
+
+    .ficha-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(20, 27, 33, 0.55);
+      backdrop-filter: blur(3px);
+    }
+
+    .ficha-overlay[hidden] {
+      display: none;
+    }
+
+    .ficha {
+      position: relative;
+      width: min(560px, 100%);
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 26px 28px;
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 24px 60px rgba(20, 27, 33, 0.35);
+    }
+
+    .ficha h2 {
+      margin: 0 34px 4px 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+
+    .ficha-sub {
+      margin: 0 0 18px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .ficha-close {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: #fff;
+      font-size: 20px;
+      line-height: 1;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .ficha-close:hover {
+      background: #f3f5f7;
+    }
+
+    .ficha-body {
+      display: grid;
+      grid-template-columns: minmax(140px, 38%) 1fr;
+      gap: 8px 16px;
+      margin: 0;
+    }
+
+    .ficha-body dt {
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .ficha-body dd {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .ficha-body a {
+      color: var(--accent);
+    }
+
+    .ficha-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .ficha-action {
+      padding: 9px 16px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .ficha-action:hover {
+      background: #244b4f;
     }
 
     .card h2 {
@@ -314,6 +426,16 @@
     </section>
   </div>
 
+  <div id="ficha-overlay" class="ficha-overlay" hidden>
+    <div class="ficha" role="dialog" aria-modal="true" aria-labelledby="ficha-title">
+      <button id="ficha-close" class="ficha-close" type="button" aria-label="Cerrar ficha">&times;</button>
+      <h2 id="ficha-title"></h2>
+      <p id="ficha-sub" class="ficha-sub"></p>
+      <dl id="ficha-body" class="ficha-body"></dl>
+      <div id="ficha-actions" class="ficha-actions"></div>
+    </div>
+  </div>
+
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -346,6 +468,12 @@
     const titularidadNode = document.getElementById("titularidad-select");
     const resetNode = document.getElementById("reset-filters");
     const resultsMetaNode = document.getElementById("results-meta");
+    const fichaOverlay = document.getElementById("ficha-overlay");
+    const fichaTitle = document.getElementById("ficha-title");
+    const fichaSub = document.getElementById("ficha-sub");
+    const fichaBody = document.getElementById("ficha-body");
+    const fichaActions = document.getElementById("ficha-actions");
+    const fichaClose = document.getElementById("ficha-close");
     const progressWrap = document.getElementById("progress-wrap");
     const progressFill = document.getElementById("progress-fill");
     const progressText = document.getElementById("progress-text");
@@ -403,6 +531,7 @@
           email: row["EMAIL"] || "",
           titularidad: row["TITULARIDAD"] || "",
           fuenteGeo: row.fuente_geo || "",
+          raw: row,
           coords: row.latitud !== "" && row.longitud !== "" && row.latitud != null && row.longitud != null
             ? {
                 lat: Number(row.latitud),
@@ -428,7 +557,7 @@
     function renderList() {
       const visibleSchools = filteredSchools.slice(0, MAX_LIST_RESULTS);
       listNode.innerHTML = visibleSchools.map((school, index) => `
-        <article class="card">
+        <article class="card" data-idx="${index}" role="button" tabindex="0">
           <h2>${index + 1}. ${school.centro}</h2>
           <p class="meta">${school.tipo} · ${school.municipio}</p>
           <p class="meta">${school.domicilio}</p>
@@ -493,16 +622,75 @@
       map.fitBounds(bounds.pad(0.18));
     }
 
-    function popupHtml(school) {
-      return `
-        <div>
-          <p class="popup-title">${school.centro}</p>
-          <p class="popup-text">${school.tipo} · ${school.titularidad || "Sin dato"}</p>
-          <p class="popup-text">${school.domicilio}, ${school.municipio}</p>
-          <p class="popup-text">CP ${school.postal} · Tel. ${school.telefono || "Sin telefono"}</p>
-          <p class="popup-text">Geo: ${school.fuenteGeo || "sin dato"}</p>
-        </div>
-      `;
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function isEmptyValue(value) {
+      return value == null || value === "" || value === "-";
+    }
+
+    function openFicha(school) {
+      const raw = school.raw || {};
+      fichaTitle.textContent = school.centro || "Centro";
+      fichaSub.textContent = [school.tipo, school.titularidad, school.municipio]
+        .filter((v) => !isEmptyValue(v))
+        .join(" · ");
+
+      const rows = [
+        ["Codigo de centro", school.codigo],
+        ["Tipo de centro", school.tipo],
+        ["Titularidad", school.titularidad],
+        ["Area territorial", school.area],
+        ["Municipio", school.municipio],
+        ["Distrito municipal", school.distrito],
+        ["Domicilio", school.domicilio],
+        ["Codigo postal", school.postal],
+        ["Telefono", school.telefono, school.telefono ? `tel:${String(school.telefono).replace(/\s+/g, "")}` : null],
+        ["Fax", raw["FAX"]],
+        ["Email", school.email, school.email ? `mailto:${school.email}` : null],
+        ["Email 2", raw["EMAIL2"], raw["EMAIL2"] && !isEmptyValue(raw["EMAIL2"]) ? `mailto:${raw["EMAIL2"]}` : null],
+        ["Coordenadas", school.coords ? `${school.coords.lat.toFixed(6)}, ${school.coords.lon.toFixed(6)}` : ""],
+        ["Fuente de geolocalizacion", school.fuenteGeo],
+        ["Precision geocoder", raw["geocoder_score"]],
+        ["Direccion detectada", raw["geocoder_match_address"]]
+      ];
+
+      fichaBody.innerHTML = rows
+        .filter(([, value]) => !isEmptyValue(value))
+        .map(([label, value, href]) => {
+          const safeValue = escapeHtml(value);
+          const rendered = href
+            ? `<a href="${escapeHtml(href)}">${safeValue}</a>`
+            : safeValue;
+          return `<dt>${escapeHtml(label)}</dt><dd>${rendered}</dd>`;
+        })
+        .join("");
+
+      const actions = [];
+      if (school.coords) {
+        const gmaps = `https://www.google.com/maps/search/?api=1&query=${school.coords.lat},${school.coords.lon}`;
+        actions.push(`<a class="ficha-action" href="${gmaps}" target="_blank" rel="noopener">Ver en Google Maps</a>`);
+      }
+      if (!isEmptyValue(school.email)) {
+        actions.push(`<a class="ficha-action" href="mailto:${escapeHtml(school.email)}">Enviar email</a>`);
+      }
+      fichaActions.innerHTML = actions.join("");
+
+      fichaOverlay.hidden = false;
+      document.body.style.overflow = "hidden";
+      if (school.coords) {
+        map.setView([school.coords.lat, school.coords.lon], Math.max(map.getZoom(), 15));
+      }
+    }
+
+    function closeFicha() {
+      fichaOverlay.hidden = true;
+      document.body.style.overflow = "";
     }
 
     async function renderMarkers(gen, visibleSchools, shouldFit = false) {
@@ -530,7 +718,7 @@
             fillColor: "#5f7f85",
             fillOpacity: 0.78
           });
-          marker.bindPopup(() => popupHtml(school));
+          marker.on("click", () => openFicha(school));
           markers.push(marker);
         }
 
@@ -699,6 +887,30 @@
         searchNode.value = "";
         populateFilters();
         applyFilter(true);
+      });
+
+      listNode.addEventListener("click", (event) => {
+        const card = event.target.closest(".card[data-idx]");
+        if (!card) return;
+        const school = filteredSchools[Number(card.dataset.idx)];
+        if (school) openFicha(school);
+      });
+
+      listNode.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const card = event.target.closest(".card[data-idx]");
+        if (!card) return;
+        event.preventDefault();
+        const school = filteredSchools[Number(card.dataset.idx)];
+        if (school) openFicha(school);
+      });
+
+      fichaClose.addEventListener("click", closeFicha);
+      fichaOverlay.addEventListener("click", (event) => {
+        if (event.target === fichaOverlay) closeFicha();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !fichaOverlay.hidden) closeFicha();
       });
     }
 
