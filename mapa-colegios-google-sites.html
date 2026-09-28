@@ -385,6 +385,36 @@
       color: var(--accent);
     }
 
+    .voto-enviar {
+      margin-top: 6px;
+      padding: 10px 22px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .voto-enviar:hover {
+      background: #244b4f;
+    }
+
+    .voto-enviar:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .voto-confirm {
+      margin: 8px 0 0;
+      min-height: 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #2e7d32;
+    }
+
     .card h2 {
       margin: 0 0 6px;
       font-size: 16px;
@@ -911,6 +941,9 @@
       heading.textContent = "Tu valoracion";
       fichaVotos.appendChild(heading);
 
+      const seleccion = {};
+      const mediaByKey = {};
+
       for (const cat of VOTE_CATEGORIES) {
         const row = document.createElement("div");
         row.className = "voto-cat";
@@ -935,9 +968,11 @@
         const media = document.createElement("p");
         media.className = "voto-media";
         media.textContent = averageText(codigo, cat.key);
+        mediaByKey[cat.key] = media;
 
         // Por defecto marcado a 3 estrellas hasta que el usuario vote.
         const current = Number(votes[cat.key]) || 3;
+        seleccion[cat.key] = current;
         const optionEls = [];
 
         for (let value = 1; value <= 5; value += 1) {
@@ -958,12 +993,10 @@
           option.appendChild(starsSpan);
           option.appendChild(textSpan);
 
-          option.addEventListener("click", async () => {
-            const anterior = Number(loadVotes(codigo)[cat.key]) || 0;
-            saveVote(codigo, cat.key, value);
+          // Solo marca la seleccion; el voto se envia con el boton Votar.
+          option.addEventListener("click", () => {
+            seleccion[cat.key] = value;
             optionEls.forEach((el) => el.classList.toggle("selected", el === option));
-            await postVote(codigo, cat.key, value, anterior);
-            media.textContent = averageText(codigo, cat.key);
           });
 
           optionEls.push(option);
@@ -975,6 +1008,33 @@
         row.appendChild(media);
         fichaVotos.appendChild(row);
       }
+
+      const voteBtn = document.createElement("button");
+      voteBtn.type = "button";
+      voteBtn.className = "voto-enviar";
+      voteBtn.textContent = "Votar";
+
+      const confirm = document.createElement("p");
+      confirm.className = "voto-confirm";
+
+      voteBtn.addEventListener("click", async () => {
+        voteBtn.disabled = true;
+        voteBtn.textContent = "Guardando\u2026";
+        confirm.textContent = "";
+        for (const cat of VOTE_CATEGORIES) {
+          const anterior = Number(loadVotes(codigo)[cat.key]) || 0;
+          const value = seleccion[cat.key];
+          saveVote(codigo, cat.key, value);
+          await postVote(codigo, cat.key, value, anterior);
+          mediaByKey[cat.key].textContent = averageText(codigo, cat.key);
+        }
+        voteBtn.disabled = false;
+        voteBtn.textContent = "Votar";
+        confirm.textContent = "\u00a1Gracias! Tu voto se ha guardado.";
+      });
+
+      fichaVotos.appendChild(voteBtn);
+      fichaVotos.appendChild(confirm);
     }
 
     function openFicha(school) {
