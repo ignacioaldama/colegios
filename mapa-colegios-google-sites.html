@@ -323,6 +323,14 @@
       color: var(--muted);
     }
 
+    .voto-media {
+      grid-column: 2;
+      margin: 2px 0 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
     .card h2 {
       margin: 0 0 6px;
       font-size: 16px;
@@ -576,6 +584,7 @@
     let currentMunicipio = "";
     let currentTipo = "";
     let currentTitularidad = "";
+    let communityVotes = {};
 
     const statusNode = document.getElementById("status");
     const listNode = document.getElementById("school-list");
@@ -773,8 +782,47 @@
       try {
         localStorage.setItem("voto:" + codigo, JSON.stringify(votes));
       } catch (error) {
-        // Almacenamiento no disponible: el voto no se persiste.
+        // Almacenamiento no disponible: el voto no se persiste en el navegador.
       }
+    }
+
+    function applyLocalAggregate(codigo, categoria, valor, anterior) {
+      communityVotes[codigo] = communityVotes[codigo] || {};
+      const agg = communityVotes[codigo][categoria] || { sum: 0, count: 0 };
+      if (anterior >= 1 && anterior <= 5 && agg.count > 0) {
+        agg.sum += valor - anterior;
+      } else {
+        agg.sum += valor;
+        agg.count += 1;
+      }
+      agg.sum = Math.max(agg.sum, 0);
+      communityVotes[codigo][categoria] = agg;
+    }
+
+    async function postVote(codigo, categoria, valor, anterior) {
+      try {
+        const response = await fetch("api/votacion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo, categoria, valor, anterior })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.aggregate) communityVotes[codigo] = data.aggregate;
+          return true;
+        }
+      } catch (error) {
+        // Sin servidor de votacion: se conserva solo en el navegador.
+      }
+      applyLocalAggregate(codigo, categoria, valor, anterior);
+      return false;
+    }
+
+    function averageText(codigo, categoria) {
+      const agg = communityVotes[codigo] && communityVotes[codigo][categoria];
+      if (!agg || !agg.count) return "";
+      const media = (agg.sum / agg.count).toFixed(1);
+      return `Media: ${media} (${agg.count} ${agg.count === 1 ? "voto" : "votos"})`;
     }
 
     function highlightStars(starsEl, count) {
@@ -807,6 +855,10 @@
         const desc = document.createElement("p");
         desc.className = "voto-desc";
 
+        const media = document.createElement("p");
+        media.className = "voto-media";
+        media.textContent = averageText(codigo, cat.key);
+
         const current = Number(votes[cat.key]) || 0;
         desc.textContent = current ? cat.descriptions[current] : "";
         stars.dataset.selected = current;
@@ -825,11 +877,14 @@
           };
           star.addEventListener("mouseenter", preview);
           star.addEventListener("focus", preview);
-          star.addEventListener("click", () => {
+          star.addEventListener("click", async () => {
+            const anterior = Number(loadVotes(codigo)[cat.key]) || 0;
             saveVote(codigo, cat.key, value);
             stars.dataset.selected = value;
             highlightStars(stars, value);
             desc.textContent = cat.descriptions[value];
+            await postVote(codigo, cat.key, value, anterior);
+            media.textContent = averageText(codigo, cat.key);
           });
 
           stars.appendChild(star);
@@ -844,6 +899,7 @@
         row.appendChild(label);
         row.appendChild(stars);
         row.appendChild(desc);
+        row.appendChild(media);
         fichaVotos.appendChild(row);
       }
     }
@@ -1158,6 +1214,16 @@
       return parseJsonRows(rows);
     }
 
+    async function loadCommunityVotes() {
+      try {
+        const response = await fetch("votacion.json", { cache: "no-store" });
+        if (response.ok) return await response.json();
+      } catch (error) {
+        // Sin fichero de votacion accesible: se empieza vacio.
+      }
+      return {};
+    }
+
     async function init() {
       attachEvents();
       updateStatus("Cargando centros...");
@@ -1168,6 +1234,7 @@
       try {
         schools = await loadSchools();
         setIndeterminate(false);
+        communityVotes = await loadCommunityVotes();
         filteredSchools = schools.slice();
         populateFilters();
         applyFilter(true);
