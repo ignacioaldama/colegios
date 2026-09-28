@@ -434,6 +434,23 @@
       color: var(--muted);
     }
 
+    .card-rating {
+      margin-top: 4px;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .card-stars {
+      color: #f5b301;
+      letter-spacing: 1px;
+    }
+
+    .card-novotes {
+      color: var(--muted);
+      font-weight: 400;
+      font-style: italic;
+    }
+
     #map {
       min-height: 70vh;
       height: 70vh;
@@ -796,6 +813,16 @@
       });
     }
 
+    function cardRatingHtml(codigo) {
+      const stats = voteStats(codigo);
+      if (!stats.voters) {
+        return `<span class="card-novotes">Sin votos aun</span>`;
+      }
+      const filled = Math.round(stats.avg);
+      const stars = "\u2605".repeat(filled) + "\u2606".repeat(5 - filled);
+      return `<span class="card-stars">${stars}</span> ${stats.avg.toFixed(1)} · ${stats.voters} ${stats.voters === 1 ? "voto" : "votos"}`;
+    }
+
     function renderList() {
       const visibleSchools = filteredSchools.slice(0, MAX_LIST_RESULTS);
       listNode.innerHTML = visibleSchools.map((school, index) => `
@@ -805,6 +832,7 @@
           <p class="meta">${school.domicilio}</p>
           <p class="meta">CP ${school.postal} · Tel. ${school.telefono || "Sin telefono"}</p>
           <p class="meta">Codigo ${school.codigo} · ${school.titularidad || "Sin dato"}</p>
+          <p class="meta card-rating">${cardRatingHtml(school.codigo)}</p>
         </article>
       `).join("");
 
@@ -1407,38 +1435,23 @@
       return parseJsonRows(rows);
     }
 
-    function loadVotesJsonp(url) {
-      // Lectura por JSONP para esquivar el CORS de Google Apps Script.
-      return new Promise((resolve) => {
-        const callback = "votosCb_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-        const script = document.createElement("script");
-        let done = false;
-        const cleanup = () => {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
-          delete window[callback];
-          if (script.parentNode) script.parentNode.removeChild(script);
-        };
-        const timer = setTimeout(() => { cleanup(); resolve({}); }, 8000);
-        window[callback] = (data) => { cleanup(); resolve(data || {}); };
-        script.onerror = () => { cleanup(); resolve({}); };
-        script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callback;
-        document.head.appendChild(script);
-      });
-    }
-
     async function loadCommunityVotes() {
-      if (VOTES_ENDPOINT) {
-        return loadVotesJsonp(VOTES_ENDPOINT);
-      }
+      const source = VOTES_ENDPOINT || "votacion.json";
       try {
-        const response = await fetch("votacion.json", { cache: "no-store" });
+        const response = await fetch(source, { cache: "no-store" });
         if (response.ok) return await response.json();
       } catch (error) {
-        // Sin fichero de votacion accesible: se empieza vacio.
+        // Sin fuente de votos accesible: se empieza vacio.
       }
       return {};
+    }
+
+    function refreshCommunityVotes() {
+      loadCommunityVotes().then((votes) => {
+        communityVotes = votes;
+        renderList();
+        if (currentVotosMin > 0 || currentValoracionMin > 0) applyFilter(false);
+      });
     }
 
     async function init() {
@@ -1457,10 +1470,7 @@
         const geocodedCount = schools.filter((school) => school.coords).length;
         updateStatus(`Mapa listo. Centros: ${schools.length}. Coordenadas: ${geocodedCount}.`);
         // Los votos compartidos se cargan en segundo plano para no bloquear el mapa.
-        loadCommunityVotes().then((votes) => {
-          communityVotes = votes;
-          if (currentVotosMin > 0 || currentValoracionMin > 0) applyFilter(false);
-        });
+        refreshCommunityVotes();
       } catch (error) {
         console.error(error);
         hideProgress();
