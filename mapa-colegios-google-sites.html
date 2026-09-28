@@ -403,6 +403,16 @@
       background: #244b4f;
     }
 
+    .ficha-action--alt {
+      background: #eef2f3;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+
+    .ficha-action--alt:hover {
+      background: #e2e8ea;
+    }
+
     .ficha-votos {
       margin-top: 22px;
       padding-top: 18px;
@@ -1299,6 +1309,10 @@
         const gmaps = `https://www.google.com/maps/search/?api=1&query=${school.coords.lat},${school.coords.lon}`;
         actions.push(`<a class="ficha-action" href="${gmaps}" target="_blank" rel="noopener">Ver en Google Maps</a>`);
       }
+      const busqueda = encodeURIComponent(`${school.centro} ${school.municipio}`);
+      actions.push(`<a class="ficha-action ficha-action--alt" href="https://www.google.com/search?q=${busqueda}+colegio" target="_blank" rel="noopener">Buscar web e info</a>`);
+      actions.push(`<a class="ficha-action ficha-action--alt" href="https://www.google.com/search?q=site:micole.net+${busqueda}" target="_blank" rel="noopener">Ver en Micole</a>`);
+      actions.push(`<a class="ficha-action ficha-action--alt" href="https://www.buscocolegio.com/Colegio/ranking-colegios-nota-selectividad-madrid.jsp" target="_blank" rel="noopener">Ranking Selectividad</a>`);
       if (!isEmptyValue(school.email)) {
         actions.push(`<a class="ficha-action" href="mailto:${escapeHtml(school.email)}">Enviar email</a>`);
       }
