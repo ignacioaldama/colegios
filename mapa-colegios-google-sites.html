@@ -89,6 +89,100 @@
       display: inline-block;
     }
 
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .titularidad-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1.5px solid transparent;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .chip-icon {
+      font-size: 15px;
+    }
+
+    .chip--publico {
+      background: #eef8f1;
+      color: #1b7f3b;
+      border-color: #bfe6cc;
+    }
+
+    .chip--concertado {
+      background: #eaf2fc;
+      color: #1c5fb0;
+      border-color: #c3daf5;
+    }
+
+    .chip--privado {
+      background: #fdf3e8;
+      color: #c76a12;
+      border-color: #f6d9b4;
+    }
+
+    .chip.active {
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(31, 41, 51, 0.18);
+    }
+
+    .chip--publico.active { background: #33a457; border-color: #33a457; }
+    .chip--concertado.active { background: #3d84d6; border-color: #3d84d6; }
+    .chip--privado.active { background: #f0932b; border-color: #f0932b; }
+
+    .info-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--accent);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .info-btn:hover {
+      background: #f3f5f7;
+    }
+
+    .info-icon {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .tit-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tit-badge--publico { background: #dff1e6; color: #1b7f3b; }
+    .tit-badge--concertado { background: #deebfa; color: #1c5fb0; }
+    .tit-badge--privado { background: #fbe8d3; color: #c76a12; }
+
     .eyebrow {
       margin: 0 0 10px;
       font-size: 12px;
@@ -608,8 +702,8 @@
       <p class="eyebrow">Google Sites + OpenStreetMap</p>
       <h1>Colegios de Madrid</h1>
       <p class="intro">
-        Vista completa de centros del fichero georreferenciado. El mapa usa OpenStreetMap con base
-        gris de CARTO, permite buscar y carga todos los puntos al instante desde un JSON publicado.
+        Vista completa de centros del fichero georreferenciado. El mapa usa OpenStreetMap,
+        permite buscar, filtrar y votar cada colegio.
       </p>
       <p id="status" class="status">Preparando mapa...</p>
       <div id="progress-wrap" class="progress-wrap" hidden>
@@ -638,9 +732,6 @@
           <select id="tipo-select" class="search-input" aria-label="Filtrar por tipo de centro">
             <option value="">Todos los tipos</option>
           </select>
-          <select id="titularidad-select" class="search-input" aria-label="Filtrar por titularidad">
-            <option value="">Todas las titularidades</option>
-          </select>
           <select id="votos-select" class="search-input" aria-label="Filtrar por numero de votos">
             <option value="0">Cualquier numero de votos</option>
             <option value="1">Con votos (1+)</option>
@@ -654,12 +745,23 @@
             <option value="4">4 estrellas o mas</option>
           </select>
         </div>
-        <button id="reset-filters" type="button" class="reset-btn">Limpiar filtros</button>
-      </div>
-      <div class="leyenda">
-        <span class="leyenda-item"><span class="leyenda-punto" style="background:#33a457"></span>Publico</span>
-        <span class="leyenda-item"><span class="leyenda-punto" style="background:#3d84d6"></span>Concertado</span>
-        <span class="leyenda-item"><span class="leyenda-punto" style="background:#f0932b"></span>Privado</span>
+        <div class="chips-row">
+          <div class="titularidad-chips" role="group" aria-label="Filtrar por titularidad">
+            <button type="button" class="chip chip--publico" data-tit="Público">
+              <span class="chip-icon">&#127963;</span> Publico
+            </button>
+            <button type="button" class="chip chip--concertado" data-tit="Privado Concertado">
+              <span class="chip-icon">&#129309;</span> Concertado
+            </button>
+            <button type="button" class="chip chip--privado" data-tit="Privado">
+              <span class="chip-icon">&#127970;</span> Privado
+            </button>
+          </div>
+          <button id="tipos-info" type="button" class="info-btn" aria-label="Ver que significa cada tipo de centro">
+            <span class="info-icon">&#9432;</span> Tipos de centro
+          </button>
+          <button id="reset-filters" type="button" class="reset-btn">Limpiar filtros</button>
+        </div>
       </div>
     </section>
     <main id="map" aria-label="Mapa de colegios">
@@ -684,6 +786,15 @@
       <dl id="ficha-body" class="ficha-body"></dl>
       <div id="ficha-votos" class="ficha-votos"></div>
       <div id="ficha-actions" class="ficha-actions"></div>
+    </div>
+  </div>
+
+  <div id="tipos-overlay" class="ficha-overlay" hidden>
+    <div class="ficha" role="dialog" aria-modal="true" aria-labelledby="tipos-title">
+      <button id="tipos-close" class="ficha-close" type="button" aria-label="Cerrar">&times;</button>
+      <h2 id="tipos-title">Tipos de centro</h2>
+      <p class="ficha-sub">Que significan las siglas del tipo de centro.</p>
+      <dl id="tipos-body" class="ficha-body"></dl>
     </div>
   </div>
 
@@ -786,7 +897,11 @@
     const areaNode = document.getElementById("area-select");
     const municipioNode = document.getElementById("municipio-select");
     const tipoNode = document.getElementById("tipo-select");
-    const titularidadNode = document.getElementById("titularidad-select");
+    const titularidadChips = document.querySelectorAll(".chip[data-tit]");
+    const tiposInfoBtn = document.getElementById("tipos-info");
+    const tiposOverlay = document.getElementById("tipos-overlay");
+    const tiposBody = document.getElementById("tipos-body");
+    const tiposClose = document.getElementById("tipos-close");
     const votosNode = document.getElementById("votos-select");
     const valoracionNode = document.getElementById("valoracion-select");
     const resetNode = document.getElementById("reset-filters");
@@ -896,10 +1011,10 @@
       listNode.innerHTML = visibleSchools.map((school, index) => `
         <article class="card ${cardClass(school.titularidad)}" data-idx="${index}" role="button" tabindex="0">
           <h2>${index + 1}. ${school.centro}</h2>
-          <p class="meta">${school.tipo} · ${school.municipio}</p>
+          <p class="meta">${titularidadBadge(school.titularidad)} ${school.tipo} · ${school.municipio}</p>
           <p class="meta">${school.domicilio}</p>
           <p class="meta">CP ${school.postal} · Tel. ${school.telefono || "Sin telefono"}</p>
-          <p class="meta">Codigo ${school.codigo} · ${school.titularidad || "Sin dato"}</p>
+          <p class="meta">Codigo ${school.codigo}</p>
           <p class="meta card-rating">${cardRatingHtml(school.codigo)}</p>
         </article>
       `).join("");
@@ -1160,9 +1275,7 @@
     function openFicha(school) {
       const raw = school.raw || {};
       fichaTitle.textContent = school.centro || raw["CENTRO"] || "Centro";
-      fichaSub.textContent = [school.tipo, school.titularidad, school.municipio]
-        .filter((v) => !isEmptyValue(v))
-        .join(" · ");
+      fichaSub.innerHTML = `${titularidadBadge(school.titularidad)} ${escapeHtml([school.tipo, school.municipio].filter((v) => !isEmptyValue(v)).join(" · "))}`;
 
       // Muestra todos los campos: primero los conocidos en orden, luego cualquier extra.
       const orderedKeys = [
@@ -1203,6 +1316,15 @@
     function closeFicha() {
       fichaOverlay.hidden = true;
       document.body.style.overflow = "";
+    }
+
+    function openTiposModal() {
+      // Muestra solo los tipos presentes en los datos, ordenados alfabeticamente.
+      const presentes = [...new Set(schools.map((s) => s.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+      tiposBody.innerHTML = presentes
+        .map((code) => `<dt>${escapeHtml(code)}</dt><dd>${escapeHtml(TIPOS_INFO[code] || "Tipo de centro educativo.")}</dd>`)
+        .join("");
+      tiposOverlay.hidden = false;
     }
 
     async function renderMarkers(gen, visibleSchools, shouldFit = false) {
@@ -1263,6 +1385,92 @@
       if (titularidad === "Privado") return "card--privado";
       return "";
     }
+
+    // Insignia con icono segun titularidad.
+    function titularidadBadge(titularidad) {
+      if (titularidad === "Público") return `<span class="tit-badge tit-badge--publico">\u{1F3DB} Publico</span>`;
+      if (titularidad === "Privado Concertado") return `<span class="tit-badge tit-badge--concertado">\u{1F91D} Concertado</span>`;
+      if (titularidad === "Privado") return `<span class="tit-badge tit-badge--privado">\u{1F3E2} Privado</span>`;
+      return "";
+    }
+
+    // Glosario de tipos de centro (siglas del fichero oficial).
+    const TIPOS_INFO = {
+      "EEI": "Escuela de Educacion Infantil (3-6 anos).",
+      "EEI-CN": "Escuela de Educacion Infantil / Casa de Ninos (0-6 anos).",
+      "ZNAS.CN.": "Casa de Ninos: primer ciclo de infantil (0-3 anos).",
+      "CP PRI": "Colegio Publico de Primaria.",
+      "CP INF-PRI": "Colegio Publico de Educacion Infantil y Primaria.",
+      "CP INF-PRI-SEC": "Colegio Publico de Infantil, Primaria y Secundaria.",
+      "CP EE": "Colegio Publico de Educacion Especial.",
+      "CP FPE": "Centro Publico de Formacion Profesional.",
+      "CP IFP": "Centro Publico Integrado de Formacion Profesional.",
+      "IES": "Instituto de Educacion Secundaria (ESO y Bachillerato).",
+      "CEPA": "Centro de Educacion de Personas Adultas.",
+      "CEPA.EP": "Centro de Educacion de Personas Adultas (educacion basica).",
+      "E.M.EPA": "Escuela Municipal de Educacion de Personas Adultas.",
+      "CPRIEPA": "Centro Privado de Educacion de Personas Adultas.",
+      "UFIL": "Unidad de Formacion e Insercion Laboral.",
+      "A. HOSP.": "Aula Hospitalaria (ensenanza en hospitales).",
+      "A. HOSP. PRIV.": "Aula Hospitalaria en centro privado.",
+      "CET": "Centro de Educacion Terapeutica.",
+      "CREI": "Centro Regional de Ensenanzas Integradas.",
+      "CREACIM": "Centro de referencia y apoyo educativo.",
+      "EOI": "Escuela Oficial de Idiomas.",
+      "EXEOI": "Extension de Escuela Oficial de Idiomas.",
+      "E ARTE": "Escuela de Arte.",
+      "ESC SUP DISEÑO": "Escuela Superior de Diseno.",
+      "ES CRBC": "Escuela Superior de Conservacion y Restauracion de Bienes Culturales.",
+      "CPROF MUS": "Conservatorio Profesional de Musica.",
+      "CSU MUS": "Conservatorio Superior de Musica.",
+      "CPROF DANZA": "Conservatorio Profesional de Danza.",
+      "CSU DANZA": "Conservatorio Superior de Danza.",
+      "ES ARTE DRA": "Escuela Superior de Arte Dramatico.",
+      "ES CANTO": "Escuela Superior de Canto.",
+      "E MUN.MUSICA": "Escuela Municipal de Musica.",
+      "E MUN. MUS-DANZA": "Escuela Municipal de Musica y Danza.",
+      "EOEP ESPECÍFICO": "Equipo de Orientacion Educativa y Psicopedagogica especifico.",
+      "EOEP ATEN-TEMPR": "Equipo de Orientacion de Atencion Temprana.",
+      "EOEP GENERAL": "Equipo de Orientacion Educativa y Psicopedagogica general.",
+      "C. PUB. ENS. DEPORT.": "Centro Publico de Ensenanzas Deportivas.",
+      "EST ADMI": "Centro de estudios o unidad administrativa educativa.",
+      "C. DOC. EN EXTRANJ.": "Centro docente espanol en el extranjero.",
+      "CF EMPLEO": "Centro de Formacion para el Empleo.",
+      "C. DOC. MILITAR": "Centro docente militar.",
+      "UNIVERSIDAD": "Universidad.",
+      "CTIF": "Centro Territorial de Innovacion y Formacion del profesorado.",
+      "CFA": "Centro de Formacion.",
+      "CFII": "Centro de Formacion.",
+      "ISMIE": "Instituto de ensenanza.",
+      "CIMELPR PRSEC": "Centro integrado (musica y ensenanza general).",
+      "CIMPR SEC": "Centro integrado de musica y secundaria.",
+      "CPR INF": "Centro Privado de Educacion Infantil.",
+      "EIPR": "Escuela Infantil Privada (0-3 / 0-6 anos).",
+      "CPR PRI": "Centro Privado de Primaria.",
+      "CPR INF-PRI": "Centro Privado de Infantil y Primaria.",
+      "CPR INF-PRI-SEC": "Centro Privado de Infantil, Primaria y Secundaria.",
+      "CPR PRI-SEC": "Centro Privado de Primaria y Secundaria.",
+      "CPR INF-SEC": "Centro Privado de Infantil y Secundaria.",
+      "CPR EE": "Centro Privado de Educacion Especial.",
+      "CPR ES": "Centro Privado de Educacion Secundaria.",
+      "CPR FPE": "Centro Privado de Formacion Profesional.",
+      "CEXTRAN ESP": "Centro extranjero en Espana.",
+      "CAU ARTES PLA-DIS": "Centro Autorizado de Artes Plasticas y Diseno.",
+      "CAU SUP DISEÑO": "Centro Autorizado Superior de Diseno.",
+      "CAU EL MUS": "Centro Autorizado Elemental de Musica.",
+      "CAU PROF MUS": "Centro Autorizado Profesional de Musica.",
+      "CAU SU MUS": "Centro Autorizado Superior de Musica.",
+      "CAU PROF DANZA": "Centro Autorizado Profesional de Danza.",
+      "CAU SU DANZA": "Centro Autorizado Superior de Danza.",
+      "CAU SU ARTE DRA": "Centro Autorizado Superior de Arte Dramatico.",
+      "CAU ENS. DEP. GM/SUP": "Centro Autorizado de Ensenanzas Deportivas (grado medio y superior).",
+      "CAU ENS.DEP.G.M": "Centro Autorizado de Ensenanzas Deportivas de Grado Medio.",
+      "CAU ENS.DEP.G.S.": "Centro Autorizado de Ensenanzas Deportivas de Grado Superior.",
+      "CAU EL MUS-DANZA": "Centro Autorizado Elemental de Musica y Danza.",
+      "CAU PROF MUS-DANZA": "Centro Autorizado Profesional de Musica y Danza.",
+      "CAU ELEM-PROF MUS": "Centro Autorizado Elemental y Profesional de Musica.",
+      "CAU ELEM-PROF MU DA": "Centro Autorizado Elemental y Profesional de Musica y Danza."
+    };
 
     function voteStats(codigo) {
       const cats = communityVotes[codigo];
@@ -1327,9 +1535,6 @@
 
       const tipos = [...new Set(schools.map((s) => s.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
       fillSelect(tipoNode, tipos, currentTipo);
-
-      const titularidades = [...new Set(schools.map((s) => s.titularidad).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
-      fillSelect(titularidadNode, titularidades, currentTitularidad);
 
       refreshMunicipios();
     }
@@ -1423,9 +1628,20 @@
         applyFilter(true);
       });
 
-      titularidadNode.addEventListener("change", (event) => {
-        currentTitularidad = event.target.value;
-        applyFilter(true);
+      titularidadChips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const value = chip.dataset.tit;
+          // Alterna: si ya estaba activo, se deselecciona.
+          currentTitularidad = currentTitularidad === value ? "" : value;
+          titularidadChips.forEach((c) => c.classList.toggle("active", c.dataset.tit === currentTitularidad));
+          applyFilter(true);
+        });
+      });
+
+      tiposInfoBtn.addEventListener("click", openTiposModal);
+      tiposClose.addEventListener("click", () => { tiposOverlay.hidden = true; });
+      tiposOverlay.addEventListener("click", (event) => {
+        if (event.target === tiposOverlay) tiposOverlay.hidden = true;
       });
 
       votosNode.addEventListener("change", (event) => {
@@ -1449,6 +1665,7 @@
         searchNode.value = "";
         votosNode.value = "0";
         valoracionNode.value = "0";
+        titularidadChips.forEach((c) => c.classList.remove("active"));
         populateFilters();
         applyFilter(true);
       });
@@ -1475,6 +1692,7 @@
       });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !fichaOverlay.hidden) closeFicha();
+        if (event.key === "Escape" && !tiposOverlay.hidden) tiposOverlay.hidden = true;
       });
     }
 
