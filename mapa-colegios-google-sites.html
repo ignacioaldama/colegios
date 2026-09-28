@@ -304,6 +304,53 @@
       margin-top: 4px;
     }
 
+    .voto-opciones {
+      display: grid;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .voto-opcion {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.1s ease, border-color 0.1s ease;
+    }
+
+    .voto-opcion:hover {
+      background: #f3f5f7;
+    }
+
+    .voto-opcion .op-stars {
+      color: #f5b301;
+      font-size: 15px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .voto-opcion.selected {
+      border-color: var(--accent);
+      background: rgba(47, 93, 98, 0.09);
+      font-weight: 700;
+    }
+
+    .voto-opcion.selected .op-text::after {
+      content: " \2713 tu voto";
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .star {
       border: 0;
       background: none;
@@ -854,12 +901,6 @@
       return `Media: ${media} (${agg.count} ${agg.count === 1 ? "voto" : "votos"})`;
     }
 
-    function highlightStars(starsEl, count) {
-      starsEl.querySelectorAll(".star").forEach((star, index) => {
-        star.classList.toggle("on", index < count);
-      });
-    }
-
     function renderVotos(school) {
       const codigo = school.codigo || (school.raw && school.raw["CODIGO CENTRO"]) || "";
       const votes = loadVotes(codigo);
@@ -888,57 +929,49 @@
         head.appendChild(label);
         head.appendChild(legend);
 
-        const stars = document.createElement("div");
-        stars.className = "voto-stars";
-
-        const desc = document.createElement("p");
-        desc.className = "voto-desc";
+        const options = document.createElement("div");
+        options.className = "voto-opciones";
 
         const media = document.createElement("p");
         media.className = "voto-media";
         media.textContent = averageText(codigo, cat.key);
 
-        // Por defecto todo marcado a 3 estrellas hasta que el usuario vote.
+        // Por defecto marcado a 3 estrellas hasta que el usuario vote.
         const current = Number(votes[cat.key]) || 3;
-        desc.textContent = cat.descriptions[current];
-        stars.dataset.selected = current;
+        const optionEls = [];
 
         for (let value = 1; value <= 5; value += 1) {
-          const star = document.createElement("button");
-          star.type = "button";
-          star.className = "star" + (value <= current ? " on" : "");
-          star.textContent = "\u2605";
-          star.dataset.value = value;
-          star.setAttribute("aria-label", `${cat.label}: ${value} estrellas - ${cat.descriptions[value]}`);
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "voto-opcion" + (value === current ? " selected" : "");
+          option.dataset.value = value;
+          option.setAttribute("aria-label", `${cat.label}: ${value} estrellas - ${cat.descriptions[value]}`);
 
-          const preview = () => {
-            highlightStars(stars, value);
-            desc.textContent = cat.descriptions[value];
-          };
-          star.addEventListener("mouseenter", preview);
-          star.addEventListener("focus", preview);
-          star.addEventListener("click", async () => {
+          const starsSpan = document.createElement("span");
+          starsSpan.className = "op-stars";
+          starsSpan.textContent = "\u2605".repeat(value) + "\u2606".repeat(5 - value);
+
+          const textSpan = document.createElement("span");
+          textSpan.className = "op-text";
+          textSpan.textContent = cat.descriptions[value];
+
+          option.appendChild(starsSpan);
+          option.appendChild(textSpan);
+
+          option.addEventListener("click", async () => {
             const anterior = Number(loadVotes(codigo)[cat.key]) || 0;
             saveVote(codigo, cat.key, value);
-            stars.dataset.selected = value;
-            highlightStars(stars, value);
-            desc.textContent = cat.descriptions[value];
+            optionEls.forEach((el) => el.classList.toggle("selected", el === option));
             await postVote(codigo, cat.key, value, anterior);
             media.textContent = averageText(codigo, cat.key);
           });
 
-          stars.appendChild(star);
+          optionEls.push(option);
+          options.appendChild(option);
         }
 
-        stars.addEventListener("mouseleave", () => {
-          const selected = Number(stars.dataset.selected) || 3;
-          highlightStars(stars, selected);
-          desc.textContent = cat.descriptions[selected] || "";
-        });
-
         row.appendChild(head);
-        row.appendChild(stars);
-        row.appendChild(desc);
+        row.appendChild(options);
         row.appendChild(media);
         fichaVotos.appendChild(row);
       }
